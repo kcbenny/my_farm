@@ -1,0 +1,133 @@
+- please add more kitty characters base on this image
+  (e.g. shooting mode, happy running mode, sleeping mode when idle after 20 seconds)
+- please add character mood status bar from 0 to 100% that deteriorate slowly by certain amount of time,
+  need to add playable items like fur balls or funny cute item to interact with the kitty character
+- after harvest, the crops should not be respawn automatically, need to buy seeds (add different type of seeds from shop)
+- need to add cute shop to buy items, there should be different currency (e.g. kitty coins, diamond)
+- the kitty can construct kitty home, add materials to build kitty home ( please give me example to make the construction more dynamic and fun to play )
+- the bird should not be on the ground , should be flying with different paths and changing velocity
+- the current scene rotation need to fix, when mouse is out of game / windows boundary, it cannot further rotate
+- the shooting cursor should only be display when right click (at shooting mode), and increase shooting speed, when not shooting mode, the character can face toward us without only just facing one direction
+- the top menu button should be group in a menu and a button to toggle the menu in and out without blocking the game 
+- the character movement, hands, head should move like realistic
+
+
+error:
+- no cursor / crosshair occur when i right click to go in shooting mode with zoom in/out
+- the bird is too fast 
+- the shop is not a button, but a realistic shop in game
+- need to add map to check where is the shop / home , and mark myself and show the path on the map
+
+
+- friendly guide to show missing items for building, and missing materials to build the house in different phase, like bubble popup to show the materials missing
+(e.g. cozy wall and cat door is missing the materials guide that need to use and also missing shop materials images)
+add the different style's house and show what materials and how many of each materials that needed to build those house.
+
+- the scene background should change base on user timezone
+- shop can have different weapons of different velocity, different shooting effect and style
+- have interaction item to increase the mood and make character happy
+
+
+
+- need to add maps of different kitty planets
+- base on runescape skills: fishing, mining, cooking, farming, construction
+  add skill menu of level 1-100, with experience to level up
+  
+  
+  
+  
+  
+🛠️ Root Causes Fixed:
+Object Allocation & Disposal Flood in PeashooterWeapon.js:
+
+Previously, every trail particle (40 per second per bullet), muzzle flash, and impact splat was instantiating new THREE.SphereGeometry, THREE.DodecahedronGeometry, and THREE.MeshBasicMaterial objects and disposing them immediately on death.
+Instantiating and disposing 100+ WebGL geometries and materials per second caused GPU buffer re-allocations and severe Garbage Collection (GC) frame freezes.
+Fix: Pre-allocated shared geometries (particleGeom, trailGeom, projGeoms) and shared materials in PeashooterWeapon.js. Reused existing geometry/material instances across all active projectiles and particles with strict caps (MAX_PARTICLES = 50, MAX_PROJECTILES = 15).
+Heavy Recursive Raycasting on 50+ Trees:
+
+triggerAction() in main.js was running recursive intersectObjects across all 50+ tree groups and leaf meshes on every shot.
+
+
+
+
+1. Vector and Matrix Allocations in Update Loops
+The Problem: Instantiating objects like new THREE.Vector3(), new THREE.Quaternion(), or new THREE.Matrix4() inside your animation loop or weapon update tick creates thousands of temporary objects per second, even if geometries are pooled.
+
+2. Texture and Render Target VRAM Leaks
+The Problem: While your geometries and materials are now shared, dynamically loaded textures, video textures, or WebGLRenderTarget instances often bypass standard garbage collection. If you switch levels, reload weapons, or create UI/particle textures dynamically without calling .dispose(), VRAM usage will continuously climb until the browser crashes.
+
+The Fix: Explicitly call .dispose() on textures, render targets, and custom framebuffers when cleaning up or destroying components.
+
+3. Scene Graph and Event Reference Leaks
+The Problem: Even if you remove a mesh from the scene, if an array (like an active projectile list) or an event listener still holds a reference to it, JavaScript's Garbage Collector cannot clear it from memory.
+The Fix: Ensure that when projectiles or particles die, they are not only hidden or pooled, but completely detached from parent groups (mesh.removeFromParent()) and cleared from any tracking arrays or event subscriptions.
+
+
+cozy pixel art, 3D low-poly
+
+
+Recommended Copilot Setup for Low-Poly Three.js Development
+Model Selection:
+
+Claude Opus / GPT-5.5: Best for structuring your Vite build, designing the modular scene architecture, creating robust lighting and shadow pipelines, and writing procedural low-poly generator scripts or character controller loops (handling keyboard/touch inputs, animations, and collision bounding boxes).
+
+Claude Sonnet: Perfect for day-to-day component styling, writing helper shaders, and tweaking materials (MeshStandardMaterial or MeshToonMaterial for that classic low-poly shaded look).
+
+Core Architectural Blueprint for Vite + Three.js:
+
+Asset Pipeline: Keep your meshes lightweight by building them procedurally with Three.js built-in primitives (BoxGeometry, ConeGeometry, CylinderGeometry) or exporting clean, low-poly .glb assets optimized with gltf-transform.
+
+Animation & Character Controller: Use Three.js AnimationMixer for skeletal animations or simple hierarchical matrix rotations for procedural low-poly limb movement.
+
+
+
+
+[kitty fine tune prompt]
+Silky Smooth Cartoon Surface Shading:
+
+Disabled flat-faceted polygon shading (flatShading: false) across all character materials.
+Replaced harsh low-poly normals with continuous interpolated vertex normals (computeVertexNormals()), giving the kitties a soft, velvety Pixar/DreamWorks cartoon look.
+Refined PBR surface properties: soft velvety fur roughness (0.85), moist glossy button nose (0.25), and smooth specular highlights on eyes, jewels, and brass bells.
+High-Density Rounded Geometry Subdivision:
+
+Head & Body: Subdivided spherical geometry from 
+14
+×
+12
+14×12 to 
+32
+×
+26
+32×26 segments, eliminating all jagged silhouettes.
+Cheeks & Muzzle: Upgraded to 
+24
+×
+20
+24×20 segments with smooth curved contouring.
+Limbs, Paws & Feet: Increased capsule and paw sphere segments to 
+16
+×
+16
+16×16 and 
+24
+×
+20
+24×20 for round paws.
+Ears: Replaced 4-sided pyramid geometry with smooth 24-radial-segment curved cones.
+Nose: Upgraded from a 3-sided triangle to a smooth rounded button nose.
+Tail & Tail Tip: Upgraded tail segment capsules and fluffy tips to 
+16
+×
+16
+16×16 and 
+24
+×
+20
+24×20 with smooth surface normals.
+Smooth Texture Filtering:
+
+Applied trilinear mipmapped filtering (THREE.LinearMipmapLinearFilter and THREE.LinearFilter) to procedural fur and eye textures for crisp, anti-aliased patterns without pixelation.
+Smooth Animation & Movement Interpolation:
+
+Upgraded vector animation tracks in CatAnimations.js to Catmull-Rom spline interpolation (THREE.InterpolateSmooth) for natural breathing bobs and tail sways without linear jerking.
+Enhanced character turning and camera tracking in PlayerController.js with exponential decay smoothing (1 - Math.exp(-18 * delta)), providing smooth, frame-rate independent rotation.

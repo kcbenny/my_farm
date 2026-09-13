@@ -1,0 +1,1199 @@
+import * as THREE from 'three';
+
+/**
+ * Procedural 3D Cartoon Cat Model Generator
+ * Supports 4 distinct character styles:
+ * 1. Sunny - Energetic Singing Golden Tabby Kitten with Open Meowing Mouth (Image 1)
+ * 2. Mochi - Sleepy Siamese Point Kitten with Cozy Closed Eyes & Chocolate Points (Image 2)
+ * 3. Snowball - Extra-Fluffy Pure White Persian with Sparkling Emerald Eyes & Fluffy Cheeks (Image 3)
+ * 4. Rusty - Classic Farm Guardian Tabby with Military Helmet, Bandana & Peashooter
+ */
+export class CatModelBuilder {
+  constructor(characterType = 'sunny') {
+    this.characterType = characterType;
+    this.materials = this.createMaterials(characterType);
+  }
+
+  createFurTexture(characterType = 'sunny') {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 512;
+    const ctx = canvas.getContext('2d');
+
+    if (characterType === 'mochi') {
+      // 2. Mochi: Siamese Seal-Point (Ivory cream body with chocolate gradients)
+      ctx.fillStyle = '#f8f1e5';
+      ctx.fillRect(0, 0, 512, 512);
+
+      // Warm body gradient
+      const bodyGrad = ctx.createRadialGradient(256, 256, 60, 256, 256, 250);
+      bodyGrad.addColorStop(0, '#faf4eb');
+      bodyGrad.addColorStop(0.7, '#f0e2cf');
+      bodyGrad.addColorStop(1, '#e3cfb7');
+      ctx.fillStyle = bodyGrad;
+      ctx.fillRect(0, 0, 512, 512);
+
+      // Cream chest patch
+      ctx.fillStyle = '#fffdfa';
+      ctx.beginPath();
+      ctx.ellipse(256, 380, 140, 110, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Soft seal-point shading around face / muzzle area
+      const maskGrad = ctx.createRadialGradient(256, 170, 20, 256, 170, 130);
+      maskGrad.addColorStop(0, 'rgba(66, 41, 29, 0.95)');
+      maskGrad.addColorStop(0.5, 'rgba(110, 77, 58, 0.75)');
+      maskGrad.addColorStop(0.85, 'rgba(168, 130, 107, 0.3)');
+      maskGrad.addColorStop(1, 'rgba(240, 226, 207, 0)');
+      ctx.fillStyle = maskGrad;
+      ctx.beginPath();
+      ctx.ellipse(256, 170, 135, 110, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+    } else if (characterType === 'snowball') {
+      // 3. Snowball: Pure White Fluffy Persian
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, 512, 512);
+
+      // Soft cloud shading for depth
+      const grad = ctx.createRadialGradient(256, 256, 40, 256, 256, 250);
+      grad.addColorStop(0, '#ffffff');
+      grad.addColorStop(0.65, '#fafcff');
+      grad.addColorStop(1, '#edf2f7');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 512, 512);
+
+      // Cute soft blushing cheek circles
+      const blushL = ctx.createRadialGradient(160, 240, 5, 160, 240, 45);
+      blushL.addColorStop(0, 'rgba(255, 182, 193, 0.55)');
+      blushL.addColorStop(1, 'rgba(255, 182, 193, 0)');
+      ctx.fillStyle = blushL;
+      ctx.beginPath();
+      ctx.arc(160, 240, 45, 0, Math.PI * 2);
+      ctx.fill();
+
+      const blushR = ctx.createRadialGradient(352, 240, 5, 352, 240, 45);
+      blushR.addColorStop(0, 'rgba(255, 182, 193, 0.55)');
+      blushR.addColorStop(1, 'rgba(255, 182, 193, 0)');
+      ctx.fillStyle = blushR;
+      ctx.beginPath();
+      ctx.arc(352, 240, 45, 0, Math.PI * 2);
+      ctx.fill();
+
+    } else if (characterType === 'sunny') {
+      // 1. Sunny: Singing Golden Ginger Tabby (Image 1)
+      ctx.fillStyle = '#f7972d';
+      ctx.fillRect(0, 0, 512, 512);
+
+      const grad = ctx.createRadialGradient(256, 256, 40, 256, 256, 250);
+      grad.addColorStop(0, '#fca744');
+      grad.addColorStop(0.8, '#f18c21');
+      grad.addColorStop(1, '#db7210');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 512, 512);
+
+      // White / Cream Belly & Chest patch
+      ctx.fillStyle = '#fff9f0';
+      ctx.beginPath();
+      ctx.ellipse(256, 380, 140, 110, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Forehead 'M' tabby mark + stripes
+      ctx.fillStyle = '#9e3d04';
+      ctx.beginPath();
+      ctx.moveTo(256, 70);
+      ctx.lineTo(238, 105);
+      ctx.lineTo(256, 122);
+      ctx.lineTo(274, 105);
+      ctx.closePath();
+      ctx.fill();
+
+      // 3 Crown bars above M
+      ctx.lineWidth = 10;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = '#9e3d04';
+      for (let i = -1; i <= 1; i++) {
+        ctx.beginPath();
+        ctx.moveTo(256 + i * 28, 48);
+        ctx.lineTo(256 + i * 24, 75);
+        ctx.stroke();
+      }
+
+      // Cheek and side tiger stripes
+      const stripes = [
+        { y: 155, len: 90, side: -1 }, { y: 155, len: 90, side: 1 },
+        { y: 195, len: 115, side: -1 }, { y: 195, len: 115, side: 1 },
+        { y: 240, len: 85, side: -1 }, { y: 240, len: 85, side: 1 },
+        { y: 295, len: 80, side: -1 }, { y: 295, len: 80, side: 1 },
+      ];
+
+      ctx.lineWidth = 13;
+      ctx.strokeStyle = '#9e3d04';
+      stripes.forEach(s => {
+        ctx.beginPath();
+        const startX = 256 + s.side * 170;
+        const endX = 256 + s.side * (170 - s.len);
+        ctx.moveTo(startX, s.y);
+        ctx.quadraticCurveTo(startX - s.side * 22, s.y + 10, endX, s.y + 4);
+        ctx.stroke();
+      });
+
+    } else {
+      // 4. Rusty: Classic Hero Ginger Tabby
+      ctx.fillStyle = '#f28e2b';
+      ctx.fillRect(0, 0, 512, 512);
+
+      const grad = ctx.createRadialGradient(256, 256, 50, 256, 256, 250);
+      grad.addColorStop(0, '#f89e3a');
+      grad.addColorStop(1, '#d97216');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 512, 512);
+
+      ctx.fillStyle = '#fff7eb';
+      ctx.beginPath();
+      ctx.ellipse(256, 380, 140, 110, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#b24c08';
+      ctx.beginPath();
+      ctx.moveTo(256, 80);
+      ctx.lineTo(240, 110);
+      ctx.lineTo(256, 125);
+      ctx.lineTo(272, 110);
+      ctx.closePath();
+      ctx.fill();
+
+      const stripes = [
+        { y: 160, len: 90, side: -1 }, { y: 160, len: 90, side: 1 },
+        { y: 200, len: 110, side: -1 }, { y: 200, len: 110, side: 1 },
+        { y: 240, len: 80, side: -1 }, { y: 240, len: 80, side: 1 },
+        { y: 300, len: 70, side: -1 }, { y: 300, len: 70, side: 1 },
+      ];
+
+      ctx.lineWidth = 14;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = '#a64405';
+      stripes.forEach(s => {
+        ctx.beginPath();
+        const startX = 256 + s.side * 170;
+        const endX = 256 + s.side * (170 - s.len);
+        ctx.moveTo(startX, s.y);
+        ctx.quadraticCurveTo(startX - s.side * 20, s.y + 10, endX, s.y + 5);
+        ctx.stroke();
+      });
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.generateMipmaps = true;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    return texture;
+  }
+
+  createEyeTexture(characterType = 'sunny') {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+
+    if (characterType === 'mochi') {
+      // Mochi: Sleepy closed / crescent cartoon eyes (Image 2)
+      ctx.fillStyle = '#f8f1e5';
+      ctx.fillRect(0, 0, 256, 256);
+
+      // Soft cute blush under eyes
+      const blush = ctx.createRadialGradient(128, 175, 10, 128, 175, 55);
+      blush.addColorStop(0, 'rgba(255, 170, 180, 0.45)');
+      blush.addColorStop(1, 'rgba(255, 170, 180, 0)');
+      ctx.fillStyle = blush;
+      ctx.beginPath();
+      ctx.arc(128, 175, 55, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Adorable curved sleeping kitten eye arc
+      ctx.strokeStyle = '#382015';
+      ctx.lineWidth = 14;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      // Gentle cute sleeping smiling crescent
+      ctx.moveTo(55, 125);
+      ctx.quadraticCurveTo(128, 168, 201, 125);
+      ctx.stroke();
+
+      // 3 dainty curved eyelashes at outer eyelid
+      ctx.lineWidth = 7;
+      ctx.beginPath();
+      ctx.moveTo(195, 128);
+      ctx.quadraticCurveTo(215, 120, 222, 110);
+      ctx.moveTo(186, 134);
+      ctx.quadraticCurveTo(205, 133, 215, 126);
+      ctx.moveTo(175, 140);
+      ctx.quadraticCurveTo(192, 145, 202, 142);
+      ctx.stroke();
+
+    } else if (characterType === 'snowball') {
+      // Snowball: Vivid jewel Emerald Green eyes with diamond sparkle (Image 3)
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, 256, 256);
+
+      // Jewel emerald gradient
+      const irisGrad = ctx.createRadialGradient(128, 128, 15, 128, 128, 92);
+      irisGrad.addColorStop(0, '#38ef7d');   // Bright vibrant aqua emerald
+      irisGrad.addColorStop(0.35, '#11998e'); // Pure jewel emerald
+      irisGrad.addColorStop(0.75, '#07614a'); // Deep emerald
+      irisGrad.addColorStop(1, '#022e23');    // Dark rim
+      ctx.fillStyle = irisGrad;
+      ctx.beginPath();
+      ctx.arc(128, 128, 95, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Deep dark pupil
+      ctx.fillStyle = '#011c15';
+      ctx.beginPath();
+      ctx.ellipse(128, 128, 44, 62, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Emerald inner reflection rim
+      ctx.strokeStyle = 'rgba(110, 255, 180, 0.45)';
+      ctx.lineWidth = 8;
+      ctx.beginPath();
+      ctx.arc(128, 128, 78, Math.PI * 0.2, Math.PI * 0.85);
+      ctx.stroke();
+
+      // Big bright sparkle reflection
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(102, 98, 26, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Star glint sparkle
+      ctx.beginPath();
+      ctx.arc(152, 148, 13, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(114, 148, 7, 0, Math.PI * 2);
+      ctx.fill();
+
+    } else if (characterType === 'sunny') {
+      // Sunny: Golden Amber / Hazel-Green energetic anime eyes (Image 1)
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, 256, 256);
+
+      // Amber to warm green gradient
+      const irisGrad = ctx.createRadialGradient(128, 128, 15, 128, 128, 92);
+      irisGrad.addColorStop(0, '#ffc048');   // Bright warm amber gold
+      irisGrad.addColorStop(0.5, '#78c044'); // Golden apple green
+      irisGrad.addColorStop(0.85, '#2f6d2b');// Deep forest
+      irisGrad.addColorStop(1, '#1b3b18');   // Dark rim
+      ctx.fillStyle = irisGrad;
+      ctx.beginPath();
+      ctx.arc(128, 128, 95, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Pupil
+      ctx.fillStyle = '#0d1e0c';
+      ctx.beginPath();
+      ctx.ellipse(128, 128, 46, 64, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Expressive Sparkle Highlights
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(104, 98, 27, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(150, 150, 13, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(116, 146, 8, 0, Math.PI * 2);
+      ctx.fill();
+
+    } else {
+      // Rusty: Classic emerald green anime eyes
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, 256, 256);
+
+      const irisGrad = ctx.createRadialGradient(128, 128, 20, 128, 128, 90);
+      irisGrad.addColorStop(0, '#52b788');
+      irisGrad.addColorStop(0.6, '#2d6a4f');
+      irisGrad.addColorStop(0.9, '#1b4332');
+      irisGrad.addColorStop(1, '#081c15');
+      ctx.fillStyle = irisGrad;
+      ctx.beginPath();
+      ctx.arc(128, 128, 95, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#081c15';
+      ctx.beginPath();
+      ctx.ellipse(128, 128, 48, 65, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(105, 100, 26, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(150, 150, 12, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(115, 145, 7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.generateMipmaps = true;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    return texture;
+  }
+
+  createMaterials(characterType = 'sunny') {
+    const furTexture = this.createFurTexture(characterType);
+    const eyeTexture = this.createEyeTexture(characterType);
+
+    // Color definitions based on character
+    let bellyColor = 0xfff6ec;
+    let darkAccentColor = 0xc45e12;
+    let noseColor = 0xff99aa;
+    let innerEarColor = 0xffb7c5;
+    let pawColor = 0xfff6ec;
+
+    if (characterType === 'mochi') {
+      bellyColor = 0xf8f1e5;
+      darkAccentColor = 0x42291d; // Dark chocolate seal point
+      noseColor = 0x382015;       // Dark chocolate nose
+      innerEarColor = 0x6d4c41;   // Cocoa inner ear
+      pawColor = 0x4a2e20;        // Dark chocolate stockings/paws
+    } else if (characterType === 'snowball') {
+      bellyColor = 0xffffff;
+      darkAccentColor = 0xe2e8f0; // Silvery white
+      noseColor = 0xffa6c1;       // Delicate baby-pink nose
+      innerEarColor = 0xffccd5;   // Soft blossom pink
+      pawColor = 0xffffff;        // Pure white paws
+    } else if (characterType === 'sunny') {
+      bellyColor = 0xfff9f0;
+      darkAccentColor = 0xb24c08;
+      noseColor = 0xff85a1;       // Coral pink nose
+      innerEarColor = 0xffb3c1;
+      pawColor = 0xfff9f0;
+    }
+
+    return {
+      fur: new THREE.MeshStandardMaterial({
+        map: furTexture,
+        roughness: 0.85,
+        metalness: 0.02,
+        color: 0xffffff,
+        flatShading: false,
+      }),
+      bellyWhite: new THREE.MeshStandardMaterial({
+        color: bellyColor,
+        roughness: 0.88,
+        metalness: 0.0,
+        flatShading: false,
+      }),
+      paws: new THREE.MeshStandardMaterial({
+        color: pawColor,
+        roughness: 0.85,
+        metalness: 0.0,
+        flatShading: false,
+      }),
+      darkAccent: new THREE.MeshStandardMaterial({
+        color: darkAccentColor,
+        roughness: 0.82,
+        metalness: 0.02,
+        flatShading: false,
+      }),
+      pinkNose: new THREE.MeshStandardMaterial({
+        color: noseColor,
+        roughness: 0.25,
+        metalness: 0.06,
+        flatShading: false,
+      }),
+      innerEar: new THREE.MeshStandardMaterial({
+        color: innerEarColor,
+        roughness: 0.85,
+        flatShading: false,
+      }),
+      eyes: new THREE.MeshStandardMaterial({
+        map: eyeTexture,
+        roughness: 0.08,
+        metalness: 0.12,
+        flatShading: false,
+      }),
+
+      // Character-specific mouth materials (Sunny's open singing mouth)
+      mouthInterior: new THREE.MeshStandardMaterial({
+        color: 0x590d18, // Deep wine mouth cavity
+        roughness: 0.45,
+        flatShading: false,
+      }),
+      tongue: new THREE.MeshStandardMaterial({
+        color: 0xff6b8b, // Cute pink tongue
+        roughness: 0.3,
+        flatShading: false,
+      }),
+      teeth: new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: 0.15,
+        flatShading: false,
+      }),
+
+      // Fluffy tufts material for Snowball
+      fluffTuft: new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: 0.88,
+        flatShading: false,
+      }),
+
+      // Character specific accessories
+      goldBell: new THREE.MeshStandardMaterial({
+        color: 0xffd166, // Shiny brass gold bell
+        roughness: 0.2,
+        metalness: 0.85,
+        flatShading: false,
+      }),
+      emeraldJewel: new THREE.MeshStandardMaterial({
+        color: 0x10b981, // Glowing emerald gemstone
+        roughness: 0.1,
+        metalness: 0.3,
+        emissive: 0x054f38,
+        emissiveIntensity: 0.45,
+        flatShading: false,
+      }),
+      nightcapBlue: new THREE.MeshStandardMaterial({
+        color: 0x8ecae6, // Pastel cozy blue nightcap
+        roughness: 0.8,
+        flatShading: false,
+      }),
+      ribbonCollar: new THREE.MeshStandardMaterial({
+        color: characterType === 'sunny' ? 0xe63946 : (characterType === 'mochi' ? 0x457b9d : (characterType === 'snowball' ? 0x059669 : 0xd90429)),
+        roughness: 0.55,
+        flatShading: false,
+      }),
+
+      // Rusty accessories
+      helmet: new THREE.MeshStandardMaterial({
+        color: 0x4a5d3f,
+        roughness: 0.4,
+        metalness: 0.18,
+        flatShading: false,
+      }),
+      helmetRim: new THREE.MeshStandardMaterial({
+        color: 0x33402b,
+        roughness: 0.5,
+        metalness: 0.25,
+        flatShading: false,
+      }),
+      helmetBadge: new THREE.MeshStandardMaterial({
+        color: 0xf4a261,
+        roughness: 0.22,
+        metalness: 0.75,
+        flatShading: false,
+      }),
+      bandana: new THREE.MeshStandardMaterial({
+        color: 0xd90429,
+        roughness: 0.6,
+        metalness: 0.02,
+        flatShading: false,
+      }),
+
+      // Peashooter Gun
+      plantGunGreen: new THREE.MeshStandardMaterial({
+        color: 0x38b000,
+        roughness: 0.35,
+        metalness: 0.08,
+        flatShading: false,
+      }),
+      plantGunDark: new THREE.MeshStandardMaterial({
+        color: 0x007200,
+        roughness: 0.45,
+        flatShading: false,
+      }),
+      plantGunYellow: new THREE.MeshStandardMaterial({
+        color: 0xffd000,
+        roughness: 0.35,
+        flatShading: false,
+      }),
+      peaProjectile: new THREE.MeshStandardMaterial({
+        color: 0x70e000,
+        roughness: 0.25,
+        metalness: 0.1,
+        emissive: 0x205000,
+        emissiveIntensity: 0.35,
+        flatShading: false,
+      })
+    };
+  }
+
+  buildCatModel(characterType = this.characterType || 'sunny') {
+    const root = new THREE.Group();
+    root.name = 'Cat_Root';
+
+    // Base Pelvis Node
+    const pelvis = new THREE.Group();
+    pelvis.name = 'Pelvis';
+    pelvis.position.set(0, 0.72, 0);
+    root.add(pelvis);
+
+    // Spine & Chest
+    const spine = new THREE.Group();
+    spine.name = 'Spine';
+    pelvis.add(spine);
+
+    const chest = new THREE.Group();
+    chest.name = 'Chest';
+    chest.position.set(0, 0.3, 0);
+    spine.add(chest);
+
+    // 1. Chubby Body Mesh (Belly + Torso) - Silky smooth subdivision
+    const bodyGeom = new THREE.SphereGeometry(0.52, 32, 24);
+    bodyGeom.scale(1.0, 1.15, 0.95);
+    bodyGeom.computeVertexNormals();
+    const bodyMesh = new THREE.Mesh(bodyGeom, this.materials.fur);
+    bodyMesh.castShadow = true;
+    bodyMesh.receiveShadow = true;
+    bodyMesh.name = 'Body_Mesh';
+    bodyMesh.position.set(0, 0.05, 0);
+    spine.add(bodyMesh);
+
+    // White belly patch mesh
+    const bellyPatchGeom = new THREE.SphereGeometry(0.44, 28, 20);
+    bellyPatchGeom.scale(0.85, 1.0, 0.6);
+    bellyPatchGeom.computeVertexNormals();
+    const bellyPatchMesh = new THREE.Mesh(bellyPatchGeom, this.materials.bellyWhite);
+    bellyPatchMesh.position.set(0, 0.02, 0.32);
+    bellyPatchMesh.castShadow = true;
+    bellyPatchMesh.name = 'Belly_Patch';
+    spine.add(bellyPatchMesh);
+
+    // Extra Fluffy Chest Ruff for Snowball (Persian Fur Cravat)
+    if (characterType === 'snowball') {
+      const ruffGroup = new THREE.Group();
+      ruffGroup.name = 'Chest_Ruff';
+      ruffGroup.position.set(0, 0.12, 0.36);
+
+      const ruffGeom1 = new THREE.SphereGeometry(0.18, 24, 18);
+      ruffGeom1.scale(1.6, 0.8, 0.8);
+      ruffGeom1.computeVertexNormals();
+      const ruffMesh1 = new THREE.Mesh(ruffGeom1, this.materials.fluffTuft);
+      ruffMesh1.position.set(0, 0.08, 0.02);
+      ruffGroup.add(ruffMesh1);
+
+      const ruffGeom2 = new THREE.SphereGeometry(0.15, 24, 18);
+      ruffGeom2.scale(1.4, 0.7, 0.7);
+      ruffGeom2.computeVertexNormals();
+      const ruffMesh2 = new THREE.Mesh(ruffGeom2, this.materials.fluffTuft);
+      ruffMesh2.position.set(0, -0.06, 0.04);
+      ruffGroup.add(ruffMesh2);
+
+      chest.add(ruffGroup);
+    }
+
+    // 2. Neck Accessories: Bandana / Collar / Bell / Jewel
+    const bandanaGroup = new THREE.Group();
+    bandanaGroup.name = 'Bandana';
+    bandanaGroup.position.set(0, 0.28, 0.02);
+
+    if (characterType === 'rusty') {
+      // Classic Red Bandana for Rusty
+      const collarGeom = new THREE.TorusGeometry(0.38, 0.07, 16, 32);
+      collarGeom.rotateX(Math.PI / 2);
+      collarGeom.scale(1.0, 0.9, 0.8);
+      collarGeom.computeVertexNormals();
+      const collarMesh = new THREE.Mesh(collarGeom, this.materials.bandana);
+      collarMesh.castShadow = true;
+      bandanaGroup.add(collarMesh);
+
+      const bandanaFoldGeom = new THREE.ConeGeometry(0.18, 0.24, 16);
+      bandanaFoldGeom.rotateX(Math.PI);
+      bandanaFoldGeom.scale(1.2, 1.0, 0.4);
+      bandanaFoldGeom.computeVertexNormals();
+      const bandanaFoldMesh = new THREE.Mesh(bandanaFoldGeom, this.materials.bandana);
+      bandanaFoldMesh.position.set(0, -0.15, 0.32);
+      bandanaFoldMesh.rotation.x = -0.25;
+      bandanaFoldMesh.castShadow = true;
+      bandanaGroup.add(bandanaFoldMesh);
+
+      const knotGeom = new THREE.SphereGeometry(0.06, 16, 12);
+      knotGeom.computeVertexNormals();
+      const knotMesh = new THREE.Mesh(knotGeom, this.materials.bandana);
+      knotMesh.position.set(0, 0.02, -0.36);
+      bandanaGroup.add(knotMesh);
+
+    } else {
+      // Elegant Ribbon Collar for Sunny, Mochi, and Snowball
+      const collarGeom = new THREE.TorusGeometry(0.36, 0.05, 16, 32);
+      collarGeom.rotateX(Math.PI / 2);
+      collarGeom.scale(1.0, 0.92, 0.85);
+      collarGeom.computeVertexNormals();
+      const collarMesh = new THREE.Mesh(collarGeom, this.materials.ribbonCollar);
+      collarMesh.castShadow = true;
+      bandanaGroup.add(collarMesh);
+
+      if (characterType === 'sunny') {
+        // Joyful Golden Jingle Bell on front
+        const bellGeom = new THREE.SphereGeometry(0.08, 24, 18);
+        bellGeom.computeVertexNormals();
+        const bellMesh = new THREE.Mesh(bellGeom, this.materials.goldBell);
+        bellMesh.position.set(0, -0.12, 0.34);
+        bellMesh.castShadow = true;
+        bandanaGroup.add(bellMesh);
+
+        // Bell ring groove & bottom hole
+        const bellRimGeom = new THREE.TorusGeometry(0.075, 0.015, 12, 24);
+        bellRimGeom.computeVertexNormals();
+        const bellRimMesh = new THREE.Mesh(bellRimGeom, this.materials.goldBell);
+        bellRimMesh.position.set(0, -0.12, 0.34);
+        bellRimMesh.rotation.x = Math.PI / 2;
+        bandanaGroup.add(bellRimMesh);
+
+      } else if (characterType === 'mochi') {
+        // Sleeping Star Charm on front
+        const starGeom = new THREE.CylinderGeometry(0.09, 0.09, 0.03, 24);
+        starGeom.rotateX(Math.PI / 2);
+        starGeom.computeVertexNormals();
+        const starMesh = new THREE.Mesh(starGeom, this.materials.goldBell);
+        starMesh.position.set(0, -0.12, 0.34);
+        starMesh.castShadow = true;
+        bandanaGroup.add(starMesh);
+
+      } else if (characterType === 'snowball') {
+        // Royal Emerald Gem Brooch
+        const gemGeom = new THREE.OctahedronGeometry(0.09, 2);
+        gemGeom.scale(1.0, 1.2, 0.6);
+        gemGeom.computeVertexNormals();
+        const gemMesh = new THREE.Mesh(gemGeom, this.materials.emeraldJewel);
+        gemMesh.position.set(0, -0.12, 0.34);
+        gemMesh.castShadow = true;
+        bandanaGroup.add(gemMesh);
+
+        // Gold bezel
+        const rimGeom = new THREE.TorusGeometry(0.08, 0.02, 12, 24);
+        rimGeom.computeVertexNormals();
+        const rimMesh = new THREE.Mesh(rimGeom, this.materials.goldBell);
+        rimMesh.position.set(0, -0.12, 0.34);
+        bandanaGroup.add(rimMesh);
+      }
+    }
+
+    chest.add(bandanaGroup);
+
+    // 3. Head Bone & Head Mesh
+    const headBone = new THREE.Group();
+    headBone.name = 'Head_Bone';
+    headBone.position.set(0, 0.38, 0.06);
+    chest.add(headBone);
+
+    // Cute Chubby Head - Silky smooth Sphere
+    const headGeom = new THREE.SphereGeometry(0.48, 32, 26);
+    headGeom.scale(1.15, 0.95, 1.0);
+    headGeom.computeVertexNormals();
+    const headMesh = new THREE.Mesh(headGeom, this.materials.fur);
+    headMesh.castShadow = true;
+    headMesh.receiveShadow = true;
+    headMesh.name = 'Head_Mesh';
+    headBone.add(headMesh);
+
+    // Chubby Cheeks
+    const cheekGeom = new THREE.SphereGeometry(0.2, 24, 20);
+    cheekGeom.computeVertexNormals();
+    const cheekMat = (characterType === 'mochi') ? this.materials.darkAccent : this.materials.bellyWhite;
+    const cheekL = new THREE.Mesh(cheekGeom, cheekMat);
+    cheekL.scale.set(1.1, 0.8, 0.9);
+    cheekL.position.set(-0.24, -0.1, 0.32);
+    cheekL.castShadow = true;
+    headBone.add(cheekL);
+
+    const cheekR = cheekL.clone();
+    cheekR.position.set(0.24, -0.1, 0.32);
+    headBone.add(cheekR);
+
+    // Snowball's Signature Fluffy Persian Cheeks (Image 3)
+    if (characterType === 'snowball') {
+      const cheekTuftGeom = new THREE.ConeGeometry(0.14, 0.32, 16);
+      cheekTuftGeom.rotateX(Math.PI / 2);
+      cheekTuftGeom.computeVertexNormals();
+
+      // Left cheek fluffy tufts
+      for (let t = -1; t <= 1; t++) {
+        const tuftL = new THREE.Mesh(cheekTuftGeom, this.materials.fluffTuft);
+        tuftL.position.set(-0.38, -0.08 + t * 0.08, 0.22);
+        tuftL.rotation.set(-0.1, -0.7 + t * 0.25, -0.3 + t * 0.2);
+        tuftL.scale.set(1.1, 1.0, 0.9);
+        tuftL.castShadow = true;
+        headBone.add(tuftL);
+
+        // Right cheek fluffy tufts
+        const tuftR = new THREE.Mesh(cheekTuftGeom, this.materials.fluffTuft);
+        tuftR.position.set(0.38, -0.08 + t * 0.08, 0.22);
+        tuftR.rotation.set(-0.1, 0.7 - t * 0.25, 0.3 - t * 0.2);
+        tuftR.scale.set(1.1, 1.0, 0.9);
+        tuftR.castShadow = true;
+        headBone.add(tuftR);
+      }
+    }
+
+    // Snout / Muzzle & Mouth
+    const muzzleMat = (characterType === 'mochi') ? this.materials.darkAccent : this.materials.bellyWhite;
+
+    if (characterType === 'sunny') {
+      // 1. Sunny: Distinctive Open Meowing / Singing Mouth (Image 1)
+      const muzzleGroup = new THREE.Group();
+      muzzleGroup.position.set(0, -0.08, 0.4);
+
+      // Upper muzzle lobes (left & right cheek pads)
+      const lobeGeom = new THREE.SphereGeometry(0.11, 20, 16);
+      lobeGeom.scale(1.1, 0.8, 0.9);
+      lobeGeom.computeVertexNormals();
+
+      const lobeL = new THREE.Mesh(lobeGeom, muzzleMat);
+      lobeL.position.set(-0.08, 0.03, 0.02);
+      lobeL.castShadow = true;
+      muzzleGroup.add(lobeL);
+
+      const lobeR = new THREE.Mesh(lobeGeom, muzzleMat);
+      lobeR.position.set(0.08, 0.03, 0.02);
+      lobeR.castShadow = true;
+      muzzleGroup.add(lobeR);
+
+      // Expressive Open Mouth Cavity (Dark pink/wine interior)
+      const mouthCavityGeom = new THREE.SphereGeometry(0.12, 24, 18);
+      mouthCavityGeom.scale(0.85, 1.25, 0.7);
+      mouthCavityGeom.computeVertexNormals();
+      const mouthCavity = new THREE.Mesh(mouthCavityGeom, this.materials.mouthInterior);
+      mouthCavity.position.set(0, -0.06, -0.02);
+      muzzleGroup.add(mouthCavity);
+
+      // Cute Pink Tongue curved upward inside
+      const tongueGeom = new THREE.SphereGeometry(0.075, 20, 16);
+      tongueGeom.scale(0.9, 0.45, 1.3);
+      tongueGeom.computeVertexNormals();
+      const tongueMesh = new THREE.Mesh(tongueGeom, this.materials.tongue);
+      tongueMesh.position.set(0, -0.09, 0.04);
+      tongueMesh.rotation.x = 0.3;
+      muzzleGroup.add(tongueMesh);
+
+      // Tiny cute kitten fangs
+      const fangGeom = new THREE.ConeGeometry(0.02, 0.045, 12);
+      fangGeom.rotateX(Math.PI);
+      fangGeom.computeVertexNormals();
+      const fangL = new THREE.Mesh(fangGeom, this.materials.teeth);
+      fangL.position.set(-0.06, 0.01, 0.05);
+      muzzleGroup.add(fangL);
+
+      const fangR = new THREE.Mesh(fangGeom, this.materials.teeth);
+      fangR.position.set(0.06, 0.01, 0.05);
+      muzzleGroup.add(fangR);
+
+      // Lower jaw chin
+      const chinGeom = new THREE.SphereGeometry(0.08, 20, 16);
+      chinGeom.scale(1.0, 0.6, 0.9);
+      chinGeom.computeVertexNormals();
+      const chinMesh = new THREE.Mesh(chinGeom, muzzleMat);
+      chinMesh.position.set(0, -0.14, 0.01);
+      chinMesh.castShadow = true;
+      muzzleGroup.add(chinMesh);
+
+      headBone.add(muzzleGroup);
+
+    } else {
+      // Standard Cute Muzzle for Mochi, Snowball, and Rusty
+      const muzzleGeom = new THREE.SphereGeometry(0.16, 26, 20);
+      muzzleGeom.scale(1.2, 0.8, 0.9);
+      muzzleGeom.computeVertexNormals();
+      const muzzleMesh = new THREE.Mesh(muzzleGeom, muzzleMat);
+      muzzleMesh.position.set(0, -0.09, 0.4);
+      muzzleMesh.castShadow = true;
+      headBone.add(muzzleMesh);
+    }
+
+    // Smooth rounded button Nose
+    const noseGeom = new THREE.SphereGeometry(0.065, 20, 16);
+    noseGeom.scale(1.15, 0.8, 0.7);
+    noseGeom.computeVertexNormals();
+    const noseMesh = new THREE.Mesh(noseGeom, this.materials.pinkNose);
+    noseMesh.position.set(0, -0.035, 0.51);
+    headBone.add(noseMesh);
+
+    // Whiskers
+    const whiskerColor = (characterType === 'mochi') ? 0x4a2e20 : 0xffffff;
+    const whiskerMat = new THREE.MeshBasicMaterial({ color: whiskerColor });
+    const whiskerGeom = new THREE.CylinderGeometry(0.008, 0.008, 0.32, 8);
+    whiskerGeom.rotateZ(Math.PI / 2);
+    whiskerGeom.computeVertexNormals();
+
+    for (let side = -1; side <= 1; side += 2) {
+      for (let w = -1; w <= 1; w++) {
+        const whisker = new THREE.Mesh(whiskerGeom, whiskerMat);
+        whisker.position.set(side * 0.36, -0.1 + w * 0.04, 0.38);
+        whisker.rotation.y = side * 0.35;
+        whisker.rotation.z = side * (w * 0.15);
+        headBone.add(whisker);
+      }
+    }
+
+    // Eyes - Smooth high-res spheres
+    const eyeGeom = new THREE.SphereGeometry(0.13, 28, 24);
+    eyeGeom.scale(1.0, 1.25, 0.6);
+    eyeGeom.computeVertexNormals();
+
+    const eyeL = new THREE.Mesh(eyeGeom, this.materials.eyes);
+    eyeL.position.set(-0.22, 0.06, 0.42);
+    eyeL.rotation.y = -0.18;
+    eyeL.rotation.x = 0.05;
+    headBone.add(eyeL);
+
+    const eyeR = new THREE.Mesh(eyeGeom, this.materials.eyes);
+    eyeR.position.set(0.22, 0.06, 0.42);
+    eyeR.rotation.y = 0.18;
+    eyeR.rotation.x = 0.05;
+    headBone.add(eyeR);
+
+    // Ears - Smooth cone with 24 radial segments
+    const earGeom = new THREE.ConeGeometry(0.18, 0.28, 24);
+    earGeom.scale(1.0, 1.0, 0.45);
+    earGeom.computeVertexNormals();
+
+    const earFurMat = (characterType === 'mochi') ? this.materials.darkAccent : this.materials.fur;
+
+    const earL = new THREE.Group();
+    earL.name = 'Ear_L';
+    const earRotZ = (characterType === 'mochi') ? 0.55 : 0.4;
+    const earRotX = (characterType === 'mochi') ? -0.2 : -0.1;
+    earL.position.set(-0.35, 0.38, 0.02);
+    earL.rotation.set(earRotX, 0.15, earRotZ);
+    const earLMesh = new THREE.Mesh(earGeom, earFurMat);
+    earLMesh.castShadow = true;
+    earL.add(earLMesh);
+
+    const innerEarGeom = new THREE.ConeGeometry(0.12, 0.2, 20);
+    innerEarGeom.scale(1.0, 1.0, 0.2);
+    innerEarGeom.computeVertexNormals();
+    const innerEarLMesh = new THREE.Mesh(innerEarGeom, this.materials.innerEar);
+    innerEarLMesh.position.set(0, -0.02, 0.06);
+    earL.add(innerEarLMesh);
+
+    // Fluffy ear hair tufts for Snowball
+    if (characterType === 'snowball') {
+      const earTuftGeom = new THREE.ConeGeometry(0.06, 0.16, 16);
+      earTuftGeom.scale(1.0, 1.0, 0.3);
+      earTuftGeom.computeVertexNormals();
+      const tuftMesh = new THREE.Mesh(earTuftGeom, this.materials.fluffTuft);
+      tuftMesh.position.set(0, 0.02, 0.08);
+      earL.add(tuftMesh);
+    }
+    headBone.add(earL);
+
+    const earR = new THREE.Group();
+    earR.name = 'Ear_R';
+    earR.position.set(0.35, 0.38, 0.02);
+    earR.rotation.set(earRotX, -0.15, -earRotZ);
+    const earRMesh = new THREE.Mesh(earGeom, earFurMat);
+    earRMesh.castShadow = true;
+    earR.add(earRMesh);
+
+    const innerEarRMesh = new THREE.Mesh(innerEarGeom, this.materials.innerEar);
+    innerEarRMesh.position.set(0, -0.02, 0.06);
+    earR.add(innerEarRMesh);
+
+    if (characterType === 'snowball') {
+      const earTuftGeom = new THREE.ConeGeometry(0.06, 0.16, 16);
+      earTuftGeom.scale(1.0, 1.0, 0.3);
+      earTuftGeom.computeVertexNormals();
+      const tuftMeshR = new THREE.Mesh(earTuftGeom, this.materials.fluffTuft);
+      tuftMeshR.position.set(0, 0.02, 0.08);
+      earR.add(tuftMeshR);
+    }
+    headBone.add(earR);
+
+    // 4. Military Helmet (Active for Rusty, hidden for others)
+    const helmetGroup = new THREE.Group();
+    helmetGroup.name = 'Helmet';
+    helmetGroup.position.set(0, 0.26, 0.02);
+    helmetGroup.rotation.x = -0.12;
+
+    if (characterType === 'rusty') {
+      const helmetDomeGeom = new THREE.SphereGeometry(0.49, 32, 24, 0, Math.PI * 2, 0, Math.PI / 2);
+      helmetDomeGeom.scale(1.06, 0.85, 1.1);
+      helmetDomeGeom.computeVertexNormals();
+      const helmetDomeMesh = new THREE.Mesh(helmetDomeGeom, this.materials.helmet);
+      helmetDomeMesh.castShadow = true;
+      helmetGroup.add(helmetDomeMesh);
+
+      const helmetRimGeom = new THREE.TorusGeometry(0.5, 0.04, 14, 32);
+      helmetRimGeom.rotateX(Math.PI / 2);
+      helmetRimGeom.scale(1.06, 1.1, 0.5);
+      helmetRimGeom.computeVertexNormals();
+      const helmetRimMesh = new THREE.Mesh(helmetRimGeom, this.materials.helmetRim);
+      helmetRimMesh.position.set(0, 0.01, 0);
+      helmetRimMesh.castShadow = true;
+      helmetGroup.add(helmetRimMesh);
+
+      const badgeGeom = new THREE.CylinderGeometry(0.08, 0.08, 0.03, 24);
+      badgeGeom.rotateX(Math.PI / 2);
+      badgeGeom.computeVertexNormals();
+      const badgeMesh = new THREE.Mesh(badgeGeom, this.materials.helmetBadge);
+      badgeMesh.position.set(0, 0.18, 0.48);
+      badgeMesh.rotation.x = -0.3;
+      helmetGroup.add(badgeMesh);
+
+      const strapGeom = new THREE.TorusGeometry(0.48, 0.02, 10, 32, Math.PI);
+      strapGeom.rotateZ(Math.PI);
+      strapGeom.computeVertexNormals();
+      const strapMesh = new THREE.Mesh(strapGeom, this.materials.helmetRim);
+      strapMesh.position.set(0, -0.05, 0.05);
+      helmetGroup.add(strapMesh);
+    } else {
+      helmetGroup.visible = false;
+    }
+    headBone.add(helmetGroup);
+
+    // 5. Arms & Hands - Smooth high-subdivision capsules & paws
+    const armGeom = new THREE.CapsuleGeometry(0.11, 0.28, 16, 16);
+    armGeom.computeVertexNormals();
+    const pawGeom = new THREE.SphereGeometry(0.12, 24, 20);
+    pawGeom.computeVertexNormals();
+
+    // Left Arm
+    const armL = new THREE.Group();
+    armL.name = 'Arm_L';
+    armL.position.set(-0.46, 0.15, 0.05);
+    chest.add(armL);
+
+    const armLMesh = new THREE.Mesh(armGeom, this.materials.fur);
+    armLMesh.position.set(-0.06, -0.16, 0);
+    armLMesh.rotation.z = -0.2;
+    armLMesh.castShadow = true;
+    armL.add(armLMesh);
+
+    const handL = new THREE.Group();
+    handL.name = 'Hand_L';
+    handL.position.set(-0.12, -0.32, 0);
+    const pawLMesh = new THREE.Mesh(pawGeom, this.materials.paws);
+    pawLMesh.castShadow = true;
+    handL.add(pawLMesh);
+    armL.add(handL);
+
+    // Right Arm (Holding Gun)
+    const armR = new THREE.Group();
+    armR.name = 'Arm_R';
+    armR.position.set(0.46, 0.15, 0.05);
+    chest.add(armR);
+
+    const armRMesh = new THREE.Mesh(armGeom, this.materials.fur);
+    armRMesh.position.set(0.06, -0.16, 0);
+    armRMesh.rotation.z = 0.2;
+    armRMesh.castShadow = true;
+    armR.add(armRMesh);
+
+    const handR = new THREE.Group();
+    handR.name = 'Hand_R';
+    handR.position.set(0.12, -0.32, 0);
+    const pawRMesh = new THREE.Mesh(pawGeom, this.materials.paws);
+    pawRMesh.castShadow = true;
+    handR.add(pawRMesh);
+    armR.add(handR);
+
+    // 6. Peashooter Plant-Gun - Smooth rounded shapes
+    const gunRoot = new THREE.Group();
+    gunRoot.name = 'Gun_Root';
+    gunRoot.position.set(0.05, -0.02, 0.12);
+    gunRoot.rotation.set(-0.35, 0.2, -0.1);
+    handR.add(gunRoot);
+
+    const gunHeadGroup = new THREE.Group();
+    gunHeadGroup.name = 'Gun_Head';
+
+    const bulbGeom = new THREE.SphereGeometry(0.18, 24, 20);
+    bulbGeom.scale(1.0, 1.0, 1.2);
+    bulbGeom.computeVertexNormals();
+    const bulbMesh = new THREE.Mesh(bulbGeom, this.materials.plantGunGreen);
+    bulbMesh.castShadow = true;
+    gunHeadGroup.add(bulbMesh);
+
+    const snoutGeom = new THREE.CylinderGeometry(0.11, 0.14, 0.32, 24);
+    snoutGeom.rotateX(Math.PI / 2);
+    snoutGeom.computeVertexNormals();
+    const snoutMesh = new THREE.Mesh(snoutGeom, this.materials.plantGunGreen);
+    snoutMesh.position.set(0, 0.02, 0.2);
+    snoutMesh.castShadow = true;
+    gunHeadGroup.add(snoutMesh);
+
+    const muzzleLipGeom = new THREE.TorusGeometry(0.16, 0.05, 16, 28);
+    muzzleLipGeom.computeVertexNormals();
+    const muzzleLipMesh = new THREE.Mesh(muzzleLipGeom, this.materials.plantGunGreen);
+    muzzleLipMesh.position.set(0, 0.02, 0.36);
+    muzzleLipMesh.castShadow = true;
+    gunHeadGroup.add(muzzleLipMesh);
+
+    const muzzleHoleGeom = new THREE.CircleGeometry(0.14, 24);
+    const muzzleHoleMesh = new THREE.Mesh(muzzleHoleGeom, this.materials.plantGunDark);
+    muzzleHoleMesh.position.set(0, 0.02, 0.38);
+    gunHeadGroup.add(muzzleHoleMesh);
+
+    const leafGeom = new THREE.ConeGeometry(0.08, 0.22, 12);
+    leafGeom.scale(1.0, 1.0, 0.2);
+    leafGeom.computeVertexNormals();
+    const topLeaf = new THREE.Mesh(leafGeom, this.materials.plantGunDark);
+    topLeaf.position.set(0, 0.18, -0.06);
+    topLeaf.rotation.x = -0.5;
+    topLeaf.castShadow = true;
+    gunHeadGroup.add(topLeaf);
+
+    const vineGripGeom = new THREE.CylinderGeometry(0.045, 0.04, 0.24, 16);
+    vineGripGeom.computeVertexNormals();
+    const vineGripMesh = new THREE.Mesh(vineGripGeom, this.materials.plantGunDark);
+    vineGripMesh.position.set(0, -0.14, 0.02);
+    vineGripMesh.rotation.x = 0.2;
+    gunHeadGroup.add(vineGripMesh);
+
+    const guardGeom = new THREE.TorusGeometry(0.08, 0.02, 10, 20, Math.PI);
+    guardGeom.rotateZ(Math.PI / 2);
+    guardGeom.computeVertexNormals();
+    const guardMesh = new THREE.Mesh(guardGeom, this.materials.plantGunGreen);
+    guardMesh.position.set(0, -0.1, 0.1);
+    gunHeadGroup.add(guardMesh);
+
+    const muzzleSpawn = new THREE.Object3D();
+    muzzleSpawn.name = 'Gun_Muzzle';
+    muzzleSpawn.position.set(0, 0.02, 0.42);
+    gunHeadGroup.add(muzzleSpawn);
+
+    gunRoot.add(gunHeadGroup);
+
+    // 7. Bipedal Legs and Paws - Smooth rounded forms
+    const legGeom = new THREE.CapsuleGeometry(0.14, 0.28, 16, 16);
+    legGeom.computeVertexNormals();
+    const footGeom = new THREE.SphereGeometry(0.16, 24, 20);
+    footGeom.scale(0.9, 0.6, 1.3);
+    footGeom.computeVertexNormals();
+
+    // Left Leg
+    const legL = new THREE.Group();
+    legL.name = 'Leg_L';
+    legL.position.set(-0.24, -0.15, 0);
+    pelvis.add(legL);
+
+    const legLMesh = new THREE.Mesh(legGeom, this.materials.fur);
+    legLMesh.position.set(0, -0.18, 0);
+    legLMesh.castShadow = true;
+    legL.add(legLMesh);
+
+    const footL = new THREE.Group();
+    footL.name = 'Foot_L';
+    footL.position.set(0, -0.34, 0.06);
+    const footLMesh = new THREE.Mesh(footGeom, this.materials.paws);
+    footLMesh.castShadow = true;
+    footLMesh.receiveShadow = true;
+    footL.add(footLMesh);
+    legL.add(footL);
+
+    // Right Leg
+    const legR = new THREE.Group();
+    legR.name = 'LegR';
+    legR.position.set(0.24, -0.15, 0);
+    pelvis.add(legR);
+
+    const legRMesh = new THREE.Mesh(legGeom, this.materials.fur);
+    legRMesh.position.set(0, -0.18, 0);
+    legRMesh.castShadow = true;
+    legR.add(legRMesh);
+
+    const footR = new THREE.Group();
+    footR.name = 'Foot_R';
+    footR.position.set(0, -0.34, 0.06);
+    const footRMesh = new THREE.Mesh(footGeom, this.materials.paws);
+    footRMesh.castShadow = true;
+    footRMesh.receiveShadow = true;
+    footR.add(footRMesh);
+    legR.add(footR);
+
+    // 8. Expressive Segmented Cat Tail - Smooth capsules
+    const tailSegGeom = new THREE.CapsuleGeometry(0.07, 0.18, 16, 16);
+    tailSegGeom.computeVertexNormals();
+
+    const tail1 = new THREE.Group();
+    tail1.name = 'Tail_1';
+    tail1.position.set(0, -0.05, -0.42);
+    tail1.rotation.set(-0.6, 0, 0);
+    pelvis.add(tail1);
+
+    const tail1Mesh = new THREE.Mesh(tailSegGeom, this.materials.fur);
+    tail1Mesh.position.set(0, 0.1, -0.04);
+    tail1Mesh.rotation.x = -0.3;
+    tail1Mesh.castShadow = true;
+    tail1.add(tail1Mesh);
+
+    const tail2 = new THREE.Group();
+    tail2.name = 'Tail_2';
+    tail2.position.set(0, 0.2, -0.08);
+    tail1.add(tail2);
+
+    const tail2Mat = (characterType === 'mochi') ? this.materials.darkAccent : ((characterType === 'snowball') ? this.materials.fur : this.materials.darkAccent);
+    const tail2Mesh = new THREE.Mesh(tailSegGeom, tail2Mat);
+    tail2Mesh.position.set(0, 0.1, 0);
+    tail2Mesh.rotation.x = 0.2;
+    tail2Mesh.castShadow = true;
+    tail2.add(tail2Mesh);
+
+    const tail3 = new THREE.Group();
+    tail3.name = 'Tail_3';
+    tail3.position.set(0, 0.2, 0.02);
+    tail2.add(tail3);
+
+    // Tail tip: Snowball gets extra fluffy plume puff, Mochi gets chocolate tip
+    const tipRadius = (characterType === 'snowball') ? 0.13 : 0.085;
+    const tailTipGeom = new THREE.SphereGeometry(tipRadius, 24, 20);
+    tailTipGeom.computeVertexNormals();
+    const tail3Mat = (characterType === 'mochi') ? this.materials.darkAccent : this.materials.bellyWhite;
+    const tail3Mesh = new THREE.Mesh(tailTipGeom, tail3Mat);
+    tail3Mesh.position.set(0, 0.08, 0.04);
+    tail3Mesh.castShadow = true;
+    tail3.add(tail3Mesh);
+
+    // Pre-calculate shadow casting and bounds
+    root.traverse(child => {
+      if (child.isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
+
+    return {
+      root,
+      bones: {
+        pelvis,
+        spine,
+        chest,
+        headBone,
+        earL,
+        earR,
+        helmet: helmetGroup,
+        bandana: bandanaGroup,
+        armL,
+        armR,
+        handL,
+        handR,
+        gunRoot,
+        gunHead: gunHeadGroup,
+        muzzleSpawn,
+        legL,
+        legR,
+        footL,
+        footR,
+        tail1,
+        tail2,
+        tail3
+      }
+    };
+  }
+}
+

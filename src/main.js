@@ -1,0 +1,558 @@
+import * as THREE from 'three';
+import { CatCharacter } from './character/CatCharacter.js';
+import { CAT_CHARACTERS } from './character/CatCharactersConfig.js';
+import { FarmEnvironment } from './world/FarmEnvironment.js';
+import { CropSystem } from './gameplay/CropSystem.js';
+import { PeashooterWeapon } from './gameplay/PeashooterWeapon.js';
+import { PestSystem } from './gameplay/PestSystem.js';
+import { PlayerController } from './gameplay/PlayerController.js';
+import { SoundSystem } from './gameplay/SoundSystem.js';
+import { UIManager } from './ui/UIManager.js';
+import { ShopSystem } from './gameplay/ShopSystem.js';
+import { KittyHomeSystem } from './gameplay/KittyHomeSystem.js';
+import { PlayableItemsSystem } from './gameplay/PlayableItemsSystem.js';
+import { MapSystem } from './ui/MapSystem.js';
+import { CharacterSelectManager } from './ui/CharacterSelectManager.js';
+
+class FarmGame {
+  constructor() {
+    this.container = document.getElementById('canvas-container');
+    this.clock = new THREE.Clock();
+
+    // Game stats
+    this.coins = 50; // Starting coins to buy initial seeds!
+    this.cropsHarvested = 0;
+    this.pestsDefeated = 0;
+
+    this.initEngine();
+    this.initComponents();
+    this.setupWindowResize();
+
+    // Start loop
+    this.animate = this.animate.bind(this);
+    requestAnimationFrame(this.animate);
+  }
+
+  initEngine() {
+    // 1. Scene
+    this.scene = new THREE.Scene();
+    this.scene.background = new THREE.Color(0x89c2d9);
+    this.scene.fog = new THREE.FogExp2(0x89c2d9, 0.015);
+
+    // 2. Camera
+    this.camera = new THREE.PerspectiveCamera(
+      50,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      1000
+    );
+    this.camera.position.set(0, 4, 8);
+
+    // 3. Renderer
+    this.renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      powerPreference: 'high-performance',
+      alpha: false
+    });
+    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.15;
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+    this.container.appendChild(this.renderer.domElement);
+  }
+
+  initComponents() {
+    this.ui = new UIManager(this);
+    this.ui.setLoadingProgress(15);
+
+    // Sound System
+    this.sound = new SoundSystem();
+    this.ui.setLoadingProgress(30);
+
+    // Shop System
+    this.shop = new ShopSystem(this);
+    this.ui.setLoadingProgress(45);
+
+    // Farm World
+    this.farm = new FarmEnvironment(this.scene);
+    this.ui.setLoadingProgress(60);
+
+    const getTerrainHeight = (x, z) => this.farm.getTerrainHeight(x, z);
+    const resolveCollision = (pos, radius) => this.farm.resolveCollision(pos, radius);
+
+    // Determine active character (default to Sunny from Image 1)
+    let initialCharId = 'sunny';
+    try {
+      const saved = localStorage.getItem('my_farm_kitty');
+      if (saved && CAT_CHARACTERS[saved]) {
+        initialCharId = saved;
+      }
+    } catch (e) {}
+
+    this.currentCharacterId = initialCharId;
+
+    // 3D Cartoon Cat Character
+    this.cat = new CatCharacter(this.scene, initialCharId);
+    this.ui.setLoadingProgress(70);
+
+    // Weapon & Projectiles
+    this.weapon = new PeashooterWeapon(this.scene);
+
+    // Crops System
+    this.cropSystem = new CropSystem(this.scene, this.farm.gardenPlots);
+
+    // Playable Items (Yarn Fur Balls, Catnip, Treats)
+    this.playableItems = new PlayableItemsSystem(this.scene, this.sound, getTerrainHeight);
+
+    // Kitty Home Construction Site
+    this.kittyHome = new KittyHomeSystem(this.scene, this.sound, getTerrainHeight);
+
+    // Pests (respects terrain elevation & flying sky birds)
+    this.pestSystem = new PestSystem(this.scene, getTerrainHeight);
+
+    // Raycaster for optical target focus and crosshair lock-on
+    this.raycaster = new THREE.Raycaster();
+    this.crosshairEl = document.getElementById('crosshair-container');
+
+    // Controller
+    this.controller = new PlayerController(
+      this.cat,
+      this.camera,
+      this.renderer.domElement,
+      this.sound,
+      getTerrainHeight,
+      resolveCollision
+    );
+
+    // Map System (Minimap HUD & Full World Map with Path Navigation)
+    this.mapSystem = new MapSystem(this);
+
+    // Character Selection Page & 3D Turntable Manager
+    this.charSelect = new CharacterSelectManager(this);
+
+    // Connect action requests
+    this.controller.onActionRequest = () => this.triggerAction();
+    this.controller.onGatherRequest = () => this.triggerGather();
+
+    // Apply active character stats & update HUD
+    this.applyCharacterTraits(initialCharId);
+    this.ui.updateCharacterHUD(initialCharId);
+
+    // Quest Progression State
+    this.questStage = 0;
+    this.stageProgress = 0;
+    this.ui.updateQuest('Harvest 3 ripe crops or plant seeds with [E]! (0/3)');
+    this.ui.updateStats(this.coins, this.cropsHarvested, this.pestsDefeated, this.shop.diamonds);
+    this.ui.updateSeedHotbar();
+
+    this.ui.setLoadingProgress(100);
+    this.setupTimezoneBackground();
+
+    // Display the Kitty Selection Page on start of game so player can choose kitty!
+    setTimeout(() => {
+      this.charSelect.open(false);
+    }, 450);
+  }
+
+  setupTimezoneBackground() {
+    const now = new Date();
+    const hour = now.getHours();
+    let preset = 'day';
+    let timeLabel = 'Daylight';
+
+    if (hour >= 5 && hour < 8) {
+      preset = 'sunset'; // Dawn / Sunrise
+      timeLabel = 'Dawn Sunrise 🌅';
+    } else if (hour >= 8 && hour < 17) {
+      preset = 'day';    // Day / Noon
+      timeLabel = 'Cozy Noon ☀️';
+    } else if (hour >= 17 && hour < 20) {
+      preset = 'sunset'; // Sunset / Dusk
+      timeLabel = 'Golden Sunset 🌅';
+    } else {
+      preset = 'night';  // Night
+      timeLabel = 'Starry Night 🌙';
+    }
+
+    if (this.farm) {
+      this.farm.setLightingPreset(preset);
+    }
+
+    const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    this.ui.showToast(`🕒 Timezone Synced: ${timeString} (${timeLabel})`);
+  }
+
+  advanceQuest() {
+    this.sound.playQuestComplete();
+    const bonusCoins = 50;
+    this.coins += bonusCoins;
+    this.questStage++;
+    this.stageProgress = 0;
+    this.ui.updateStats(this.coins, this.cropsHarvested, this.pestsDefeated, this.shop ? this.shop.diamonds : 0);
+
+    if (this.questStage === 1) {
+      this.ui.showToast(`🎉 Quest Complete! +${bonusCoins}🪙 Bonus!`);
+      setTimeout(() => {
+        this.pestSystem.spawnInvasion(this.farm.gardenPlots);
+        this.ui.showToast('🚨 Alert: Pests spotted near the garden beds! Defend them with [Left-Click / F]!');
+        this.ui.updateQuest('Defend crops! Shoot 3 pesky crows & moles with [Left-Click / F]! (0/3)');
+      }, 800);
+    } else if (this.questStage === 2) {
+      this.ui.showToast(`🎉 Crops Defended! +${bonusCoins}🪙 Bonus!`);
+      this.ui.updateQuest('Bountiful Farm: Harvest 5 more delicious crops! (0/5)');
+    } else if (this.questStage === 3) {
+      this.ui.showToast(`🎉 Barn Stocked! +${bonusCoins}🪙 Bonus!`);
+      setTimeout(() => {
+        this.pestSystem.spawnInvasion(this.farm.gardenPlots);
+        this.ui.showToast('🚨 Large pest wave approaching! Defend the farm!');
+        this.ui.updateQuest('Critter Patrol: Scare away 5 invading pests! (0/5)');
+      }, 800);
+    } else if (this.questStage === 4) {
+      this.ui.showToast(`🎉 Farm Hero! +${bonusCoins}🪙 Bonus!`);
+      this.ui.updateQuest(`Farm Tycoon: Amass 300 gold coins! (${this.coins}/300)`);
+    } else {
+      this.ui.showToast('🏆 Master Farmer Achievement Unlocked! +100🪙!');
+      this.coins += 100;
+      this.ui.updateStats(this.coins, this.cropsHarvested, this.pestsDefeated, this.shop ? this.shop.diamonds : 0);
+      this.ui.updateQuest('🏆 Master Farmer Cat! Enjoy free-roaming and managing your cozy farm!');
+    }
+  }
+
+  selectCharacter(characterId) {
+    if (!CAT_CHARACTERS[characterId]) return;
+
+    const prevPosition = this.controller ? this.controller.position.clone() : new THREE.Vector3(0, 0, 0);
+    const prevRotation = this.controller ? this.controller.rotationAngle : 0;
+    const prevJumpOffset = this.controller ? this.controller.jumpOffset : 0;
+    const prevMood = this.cat ? this.cat.mood : 100;
+
+    if (this.cat) {
+      this.cat.dispose();
+    }
+
+    this.currentCharacterId = characterId;
+    this.cat = new CatCharacter(this.scene, characterId);
+    this.cat.mood = prevMood;
+
+    if (this.controller) {
+      this.controller.setCat(this.cat);
+      this.controller.position.copy(prevPosition);
+      this.controller.rotationAngle = prevRotation;
+      this.controller.jumpOffset = prevJumpOffset;
+    }
+
+    this.controller.onActionRequest = () => this.triggerAction();
+    this.controller.onGatherRequest = () => this.triggerGather();
+
+    this.applyCharacterTraits(characterId);
+
+    if (this.ui) {
+      this.ui.updateCharacterHUD(characterId);
+    }
+  }
+
+  applyCharacterTraits(characterId) {
+    const char = CAT_CHARACTERS[characterId];
+    if (!char) return;
+
+    if (this.controller) {
+      // Sunny has +15% speed (Image 1); Mochi is more relaxed (Image 2)
+      this.controller.speed = 5.6 * (char.bonuses.speedMult || 1.0);
+    }
+    if (this.cat) {
+      this.cat.moodDecayInterval = (char.bonuses.moodDecayMult < 1.0) ? (3.5 / char.bonuses.moodDecayMult) : 3.5;
+    }
+  }
+
+  resetGame() {
+    this.coins = 50;
+    this.cropsHarvested = 0;
+    this.pestsDefeated = 0;
+    this.questStage = 0;
+    this.stageProgress = 0;
+    if (this.shop) this.shop.diamonds = 5;
+    if (this.cat) this.cat.mood = 100;
+
+    // Reset player position
+    const initialGroundY = this.farm.getTerrainHeight(0, 0);
+    this.controller.position.set(0, initialGroundY, 0);
+    this.controller.jumpOffset = 0;
+    this.controller.verticalVelocity = 0;
+    this.controller.isGrounded = true;
+
+    // Reset crops
+    this.cropSystem.crops.forEach(crop => {
+      crop.stage = 'ripe';
+      crop.scale = 1.0;
+      crop.mesh.scale.set(1, 1, 1);
+    });
+
+    // Reset UI
+    this.ui.updateStats(this.coins, 0, 0, this.shop ? this.shop.diamonds : 5);
+    this.ui.updateQuest('Harvest 3 ripe crops or plant seeds with [E]! (0/3)');
+    this.ui.showToast('🌱 New Farm Adventure Started!');
+  }
+
+  triggerAction() {
+    this.cat.triggerAction((muzzlePos, muzzleDir) => {
+      // Cast optical ray from center of screen (crosshair focus point)
+      this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+      const pestHit = this.pestSystem.raycastPest(this.raycaster);
+
+      const camDir = new THREE.Vector3();
+      this.camera.getWorldDirection(camDir);
+      let aimTarget = null;
+
+      if (pestHit) {
+        // Direct lock onto the targeted pest
+        aimTarget = pestHit.point;
+      } else {
+        // Raycast against terrain ground for instant, lag-free targeting
+        if (this.farm && this.farm.terrainMesh) {
+          const intersects = this.raycaster.intersectObject(this.farm.terrainMesh, false);
+          if (intersects.length > 0) {
+            aimTarget = intersects[0].point;
+          }
+        }
+        if (!aimTarget) {
+          aimTarget = this.camera.position.clone().addScaledVector(camDir, 60.0);
+        }
+      }
+
+      this.weapon.fire(muzzlePos, camDir, aimTarget, this.sound);
+
+      // Sunny's signature cheerful singing meow on action
+      if (this.currentCharacterId === 'sunny' && this.sound) {
+        this.sound.playMeow(1.3);
+      }
+    });
+  }
+
+  triggerGather() {
+    if (this.cat.currentActionName === 'Action' || this.cat.currentActionName === 'Gather') return;
+
+    // 1. Check Harvestable Ripe Crop
+    const nearestCrop = this.cropSystem.getNearestHarvestableCrop(this.controller.position);
+    if (nearestCrop) {
+      this.cat.triggerGather(() => {
+        const reward = this.cropSystem.harvestCrop(nearestCrop);
+        if (reward) {
+          let gainedCoins = reward.coins;
+          let gainedDiamonds = reward.diamonds || 0;
+
+          // Snowball's Lucky Whiskers trait (+25% bonus coins & 25% chance of extra diamond)
+          if (this.currentCharacterId === 'snowball') {
+            gainedCoins = Math.round(gainedCoins * 1.25);
+            if (Math.random() < 0.25) {
+              gainedDiamonds += 1;
+            }
+          }
+
+          this.coins += gainedCoins;
+          this.cropsHarvested++;
+          if (gainedDiamonds) this.shop.diamonds += gainedDiamonds;
+
+          this.sound.playHarvest();
+          this.ui.updateStats(this.coins, this.cropsHarvested, this.pestsDefeated, this.shop.diamonds);
+
+          const bonusLabel = (this.currentCharacterId === 'snowball') ? ' (✨ Lucky Whiskers!)' : '';
+          this.ui.showToast(`+${gainedCoins}🪙 Harvested ${reward.name}!${bonusLabel}`);
+
+          if (this.questStage === 0) {
+            this.stageProgress++;
+            if (this.stageProgress >= 3) {
+              this.advanceQuest();
+            } else {
+              this.ui.updateQuest(`Harvest 3 ripe crops with [E]! (${this.stageProgress}/3)`);
+            }
+          }
+        }
+      });
+      return;
+    }
+
+    // 2. Check Empty Plot to Plant Seed
+    const nearestEmptyPlot = this.cropSystem.getNearestEmptyPlot(this.controller.position);
+    if (nearestEmptyPlot) {
+      const activeSeed = this.shop.activeSeed;
+      if (this.shop.seeds[activeSeed] > 0) {
+        this.cat.triggerGather(() => {
+          this.shop.seeds[activeSeed]--;
+          this.cropSystem.plantSeed(nearestEmptyPlot, activeSeed);
+          this.sound.playPop();
+          this.ui.updateSeedHotbar();
+          this.ui.showToast(`🌱 Planted 1x ${activeSeed.toUpperCase()} seed!`);
+        });
+      } else {
+        this.ui.showToast(`❌ Out of ${activeSeed.toUpperCase()} seeds! Buy more from the 🛒 Cute Shop!`);
+      }
+      return;
+    }
+
+    // 3. Check Near Kitty Home Construction Site
+    const distToHome = this.kittyHome.getDistanceToPlayer(this.controller.position);
+    if (distToHome < 4.5) {
+      if (this.ui) {
+        this.ui.openHouseGuideModal();
+      }
+      return;
+    }
+
+    // 4. Check Near 3D Shop Stall
+    if (this.farm && this.farm.shopStallPos) {
+      const distToShop = this.controller.position.distanceTo(this.farm.shopStallPos);
+      if (distToShop < 4.5) {
+        if (this.ui && this.ui.shopModal) {
+          this.ui.shopModal.classList.remove('hidden');
+          this.sound.playPop();
+          this.ui.showToast('🛒 Welcome to Kitty\'s Cute Farm Shop!');
+        }
+        return;
+      }
+    }
+
+    this.ui.showToast('🌱 Stand closer to a ripe crop, empty plot, 3D Shop stall, or Kitty Home site!');
+  }
+
+  setupWindowResize() {
+    window.addEventListener('resize', () => {
+      this.camera.aspect = window.innerWidth / window.innerHeight;
+      this.camera.updateProjectionMatrix();
+      this.renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  }
+
+  animate() {
+    requestAnimationFrame(this.animate);
+
+    const delta = Math.min(this.clock.getDelta(), 0.1);
+
+    // Update Cat Animations & Mood
+    this.cat.update(delta);
+    if (this.ui) this.ui.updateMood(this.cat.mood);
+
+    // Update Playable Items (Yarn Fur Balls, Catnip, Treats)
+    if (this.playableItems) {
+      this.playableItems.update(delta, this.controller.position, (item) => {
+        this.cat.boostMood(item.moodBoost);
+        this.ui.showToast(`🐱 Played with ${item.name}! Mood +${item.moodBoost}%!`);
+      });
+    }
+
+    // Update Kitty Home Site & Construction Animations
+    if (this.kittyHome) {
+      this.kittyHome.update(delta, this.controller.position);
+    }
+
+    // Update Map System (Minimap & 3D Waypoint Path Navigation)
+    if (this.mapSystem) {
+      const facingAngle = this.cat ? this.cat.mesh.rotation.y : 0;
+      this.mapSystem.update(delta, this.controller.position, facingAngle);
+    }
+
+    // Update Controller
+    this.controller.update(delta);
+
+    // Update Farm Ambient Animations
+    this.farm.update(delta);
+
+    // Update Crops
+    this.cropSystem.update(delta);
+
+    // Update Peashooter Projectiles & Hit Check
+    this.weapon.update(delta, (bulletPos, radius) => {
+      const hit = this.pestSystem.checkHit(bulletPos, radius);
+      if (hit) {
+        this.sound.playSplat();
+        this.pestsDefeated++;
+        this.coins += hit.points;
+        this.ui.updateStats(this.coins, this.cropsHarvested, this.pestsDefeated, this.shop.diamonds);
+        this.ui.showToast(`🎯 +${hit.points}🪙 Scared away ${hit.type}!`);
+
+        // Check active defense quests
+        if (this.questStage === 1) {
+          this.stageProgress++;
+          if (this.stageProgress >= 3) {
+            this.advanceQuest();
+          } else {
+            this.ui.updateQuest(`Defend crops! Shoot 3 pesky crows & moles with [Left-Click / F]! (${this.stageProgress}/3)`);
+          }
+        } else if (this.questStage === 3) {
+          this.stageProgress++;
+          if (this.stageProgress >= 5) {
+            this.advanceQuest();
+          } else {
+            this.ui.updateQuest(`Critter Patrol: Scare away 5 invading pests! (${this.stageProgress}/5)`);
+          }
+        } else if (this.questStage === 4) {
+          if (this.coins >= 300) {
+            this.advanceQuest();
+          } else {
+            this.ui.updateQuest(`Farm Tycoon: Amass 300 gold coins! (${this.coins}/300)`);
+          }
+        }
+
+        return true;
+      }
+
+      // Check obstacle hit (fences, barn, trees)
+      if (this.farm.checkObstacleCollision && this.farm.checkObstacleCollision(bulletPos, radius)) {
+        this.sound.playSplat();
+        return true;
+      }
+
+      return false;
+    });
+
+    // Update Pests (Flying Birds in Sky & Moles)
+    this.pestSystem.update(delta);
+
+    // Continuous Crosshair Optical Target Detection
+    this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+    const pestUnderCrosshair = this.pestSystem.raycastPest(this.raycaster);
+    if (this.crosshairEl) {
+      if (pestUnderCrosshair) {
+        this.crosshairEl.classList.add('target-locked');
+      } else {
+        this.crosshairEl.classList.remove('target-locked');
+      }
+    }
+
+    // Dynamic Interaction Prompts (Harvest / Plant Seed / Construct Kitty Home / Shop)
+    const nearCrop = this.cropSystem.getNearestHarvestableCrop(this.controller.position);
+    const nearEmptyPlot = this.cropSystem.getNearestEmptyPlot(this.controller.position);
+    const distToHome = this.kittyHome ? this.kittyHome.getDistanceToPlayer(this.controller.position) : 99;
+    const distToShop = (this.farm && this.farm.shopStallPos) ? this.controller.position.distanceTo(this.farm.shopStallPos) : 99;
+
+    if (nearCrop) {
+      this.ui.showInteractionPrompt(`Harvest ${nearCrop.type.toUpperCase()}`);
+    } else if (nearEmptyPlot) {
+      const activeSeed = this.shop.activeSeed;
+      const seedCount = this.shop.seeds[activeSeed] || 0;
+      this.ui.showInteractionPrompt(`Plant ${activeSeed.toUpperCase()} Seed (${seedCount} left)`);
+    } else if (distToShop < 4.5) {
+      this.ui.showInteractionPrompt('Open Cute Shop 🛒');
+    } else if (distToHome < 4.5) {
+      const reqs = this.kittyHome.getStageRequirements();
+      if (reqs) {
+        this.ui.showInteractionPrompt(`Build Kitty Home: ${reqs.title}`);
+      } else {
+        this.ui.showInteractionPrompt('🏰 Kitty Castle Complete!');
+      }
+    } else {
+      this.ui.hideInteractionPrompt();
+    }
+
+    // Render Scene
+    this.renderer.render(this.scene, this.camera);
+  }
+}
+
+// Start game when DOM is loaded
+window.addEventListener('DOMContentLoaded', () => {
+  new FarmGame();
+});

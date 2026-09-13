@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>🐾 My Farm: Ginger Tabby Cat 3D Adventure</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Nunito:wght@400;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./src/styles/main.css" />
+  <link rel="stylesheet" href="./src/styles/shop.css" />
+  <link rel="stylesheet" href="./src/styles/character-select.css" />
+</head>
+<body>
+  <!-- 3D Canvas -->
+  <div id="canvas-container"></div>
+
+  <!-- Loading Screen -->
+  <div id="loading-screen" class="loading-screen">
+    <div class="loader-content">
+      <div class="cat-loader-icon">🐱🌱</div>
+      <h2>Preparing Farm & Tabby Cat...</h2>
+      <p class="subtitle">Generating low-poly 3D models, textures, and animations</p>
+      <div class="progress-bar-container">
+        <div id="progress-bar" class="progress-bar"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Character Selection Screen (Start of Game & Switch Kitty) -->
+  <div id="character-select-page" class="character-select-overlay">
+    <div class="character-select-card">
+      <!-- Header -->
+      <div class="char-select-header">
+        <div class="header-badge">🐾 Choose Your Kitty Farmer</div>
+        <h2>Who will farm today?</h2>
+        <p class="subtitle">Select your 3D cartoon kitty companion to explore and care for the farm!</p>
+      </div>
+
+      <!-- Main Content: Left 3D Turntable, Right Character Details & Stats -->
+      <div class="char-select-body">
+        <!-- 3D Turntable Showcase -->
+        <div class="char-preview-column">
+          <div class="turntable-card">
+            <div class="turntable-header">
+              <span id="preview-image-badge" class="inspiration-pill">📸 Image 1: Singing Tabby</span>
+              <span class="turntable-hint">🖱️ Drag to rotate 3D</span>
+            </div>
+            <div id="char-turntable-viewport" class="turntable-viewport">
+              <canvas id="char-turntable-canvas"></canvas>
+              <!-- Floating Name Tag in 3D -->
+              <div id="preview-floating-tag" class="preview-floating-tag">
+                <span id="preview-cat-emoji">🐱🎶</span>
+                <span id="preview-cat-name">Sunny</span>
+              </div>
+            </div>
+            <!-- Preview Animation Chips -->
+            <div class="preview-anim-row">
+              <span class="anim-label">Pose:</span>
+              <button class="preview-anim-btn active" data-anim="Idle">Idle 💤</button>
+              <button class="preview-anim-btn" data-anim="Walk">Walk 🐾</button>
+              <button class="preview-anim-btn" data-anim="Action">Action 🌿</button>
+              <button class="preview-anim-btn" data-anim="Gather">Gather 🥕</button>
+              <button class="preview-anim-btn" data-anim="HappyRun">Trot 🏃</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Character Info & Roster Cards Column -->
+        <div class="char-roster-column">
+          <!-- Selected Cat Details Card -->
+          <div class="char-selected-info">
+            <div class="info-top-row">
+              <div>
+                <div class="title-with-badge">
+                  <h3 id="selected-char-name">Sunny</h3>
+                  <span id="selected-char-badge" class="char-role-badge badge-sunny">Vibrant Singer</span>
+                </div>
+                <p id="selected-char-title" class="char-breed-title">Golden Tabby • Joyful Meowing Singer</p>
+              </div>
+            </div>
+
+            <p id="selected-char-quote" class="char-quote">"Meoooow~! The sun is up, let's plant carrots!"</p>
+            <p id="selected-char-desc" class="char-description">
+              An enthusiastic golden ginger kitten with a wide-open singing meow! Inspired by Image 1, Sunny loves greeting the morning sun, singing joyful songs, and running full speed through the crops.
+            </p>
+
+            <div class="trait-box">
+              <span class="trait-label">Special Ability:</span>
+              <span id="selected-char-trait" class="trait-value">⚡ Sun Sprint (+15% Run Speed)</span>
+            </div>
+
+            <!-- Stat Meters -->
+            <div class="stats-meters-grid">
+              <div class="stat-meter-item">
+                <div class="meter-header"><span>⚡ Speed</span><span id="stat-val-speed">95</span></div>
+                <div class="meter-bar"><div id="meter-fill-speed" class="meter-fill" style="width: 95%;"></div></div>
+              </div>
+              <div class="stat-meter-item">
+                <div class="meter-header"><span>💖 Cuteness</span><span id="stat-val-cuteness">92</span></div>
+                <div class="meter-bar"><div id="meter-fill-cuteness" class="meter-fill" style="width: 92%;"></div></div>
+              </div>
+              <div class="stat-meter-item">
+                <div class="meter-header"><span>🥕 Farming</span><span id="stat-val-farming">82</span></div>
+                <div class="meter-bar"><div id="meter-fill-farming" class="meter-fill" style="width: 82%;"></div></div>
+              </div>
+              <div class="stat-meter-item">
+                <div class="meter-header"><span>🔥 Energy</span><span id="stat-val-energy">98</span></div>
+                <div class="meter-bar"><div id="meter-fill-energy" class="meter-fill" style="width: 98%;"></div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4 Kitty Selection Cards -->
+          <div class="char-cards-grid" id="char-cards-container">
+            <!-- Populated dynamically by CharacterSelectManager -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer Actions -->
+      <div class="char-select-footer">
+        <button id="btn-close-char-select" class="secondary-btn hidden" title="Cancel & Return">Stay with Current Kitty</button>
+        <button id="btn-confirm-character" class="confirm-char-btn">
+          <span class="btn-sparkle">✨</span>
+          <span id="btn-confirm-text">Play as Sunny! 🐾</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top Navigation & Status Bar -->
+  <header id="top-bar" class="top-bar">
+    <div class="brand">
+      <span class="game-logo">🌾</span>
+      <div class="title-group">
+        <h1 class="game-title">Ginger Tabby's Farm</h1>
+        <span class="version-badge">3D WebGL</span>
+      </div>
+    </div>
+
+    <!-- Currency & Status Badges -->
+    <div class="stats-group">
+      <div class="stat-badge coins-badge" title="Kitty Coins">
+        <span class="stat-icon">🪙</span>
+        <span id="coins-count" class="stat-val">0</span>
+      </div>
+      <div class="stat-badge diamonds-badge" title="Diamonds">
+        <span class="stat-icon">💎</span>
+        <span id="diamonds-count" class="stat-val">5</span>
+      </div>
+      <div class="stat-badge mood-badge" title="Kitty Character Mood Status">
+        <span id="mood-emoji" class="stat-icon">😄</span>
+        <div class="mood-bar-wrapper">
+          <div id="mood-bar-fill" class="mood-bar-fill" style="width: 100%;"></div>
+        </div>
+        <span id="mood-val" class="stat-val">100%</span>
+      </div>
+    </div>
+
+    <!-- Shop & Collapsible Menu Toggle -->
+    <div class="top-hud-controls">
+      <button id="btn-switch-kitty" class="pill-btn kitty-btn" title="Choose or Switch Kitty Character">
+        <span id="hud-kitty-avatar">🐱🎶</span>
+        <span id="hud-kitty-name">Sunny</span>
+      </button>
+      <button id="btn-open-shop" class="pill-btn shop-btn" title="Open Cute Shop [Shop Seeds, Toys & Materials]">
+        <span>🛒 Cute Shop</span>
+      </button>
+      <button id="btn-toggle-menu" class="pill-btn menu-toggle-btn" title="Toggle Menu Options">
+        <span>☰ Menu</span>
+      </button>
+    </div>
+
+    <!-- Collapsible Slide-out Menu -->
+    <div id="collapsible-top-menu" class="collapsible-menu hidden">
+      <div class="menu-actions-grid">
+        <button id="btn-menu-switch-kitty" class="pill-btn highlight" title="Choose Kitty Character">
+          <span>🐾 Choose Kitty</span>
+        </button>
+        <button id="btn-fps-mode" class="pill-btn fps-toggle" title="Toggle First Person / Third Person Mode [V]">
+          <span>🎯 FPS View</span>
+        </button>
+        <button id="btn-audio-toggle" class="icon-btn" title="Toggle Music & SFX">
+          <span class="btn-icon">🔊</span>
+        </button>
+        <button id="btn-inspect-mode" class="pill-btn highlight" title="Inspect Cat Model & Animations">
+          <span>🔍 Model Viewer</span>
+        </button>
+        <button id="btn-export-glb" class="pill-btn export" title="Download .GLB with Embedded Animations">
+          <span>📦 Export .GLB</span>
+        </button>
+        <button id="btn-help-toggle" class="icon-btn" title="Help & Controls">
+          <span class="btn-icon">❓</span>
+        </button>
+        <button id="btn-exit-menu" class="pill-btn exit-btn" title="Exit to Main Menu">
+          <span>🚪 Exit</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Seed Selector Quick Hotbar -->
+  <div id="seed-quick-bar" class="seed-quick-bar">
+    <span class="hotbar-label">🌱 Plant Seed:</span>
+    <div class="seed-chips-container">
+      <button class="seed-chip active" data-seed="carrot">🥕 Carrot (<span id="seed-count-carrot">5</span>)</button>
+      <button class="seed-chip" data-seed="pumpkin">🎃 Pumpkin (<span id="seed-count-pumpkin">2</span>)</button>
+      <button class="seed-chip" data-seed="cabbage">🥬 Cabbage (<span id="seed-count-cabbage">3</span>)</button>
+      <button class="seed-chip" data-seed="sunflower">🌻 Sunflower (<span id="seed-count-sunflower">1</span>)</button>
+      <button class="seed-chip" data-seed="peashooter">🫛 Peashooter (<span id="seed-count-peashooter">1</span>)</button>
+      <button class="seed-chip" data-seed="strawberry">🍓 Strawberry (<span id="seed-count-strawberry">2</span>)</button>
+    </div>
+  </div>
+
+  <!-- Cute Shop Modal -->
+  <div id="cute-shop-modal" class="shop-modal-overlay hidden">
+    <div class="shop-card">
+      <div class="shop-header">
+        <div class="shop-title">
+          <span class="shop-icon">🛒🐾</span>
+          <div>
+            <h2>Kitty's Cute Farm Shop</h2>
+            <p>Buy seeds, playable toys, and building materials!</p>
+          </div>
+        </div>
+        <button id="btn-close-shop" class="icon-btn close-btn">✕</button>
+      </div>
+
+      <!-- Shop Category Tabs -->
+      <div class="shop-tabs">
+        <button class="shop-tab active" data-tab="seeds">🌱 Seeds</button>
+        <button class="shop-tab" data-tab="toys">🧶 Toys & Treats</button>
+        <button class="shop-tab" data-tab="weapons">⚔️ Weapons</button>
+        <button class="shop-tab" data-tab="materials">🪵 Materials</button>
+        <button class="shop-tab" data-tab="diamonds">💎 Exchange</button>
+      </div>
+
+      <!-- Shop Tab Content: Seeds -->
+      <div id="shop-tab-seeds" class="shop-tab-content">
+        <div class="shop-grid">
+          <div class="shop-item-card">
+            <div class="item-emoji">🥕</div>
+            <h4>Carrot Seeds</h4>
+            <p class="item-desc">Fast growing tasty carrots!</p>
+            <button class="buy-btn" data-buy="seed" data-item="carrot">Buy 1x (5🪙)</button>
+          </div>
+          <div class="shop-item-card">
+            <div class="item-emoji">🎃</div>
+            <h4>Pumpkin Seeds</h4>
+            <p class="item-desc">Big golden pumpkins!</p>
+            <button class="buy-btn" data-buy="seed" data-item="pumpkin">Buy 1x (10🪙)</button>
+          </div>
+          <div class="shop-item-card">
+            <div class="item-emoji">🥬</div>
+            <h4>Cabbage Seeds</h4>
+            <p class="item-desc">Crisp leafy cabbages!</p>
+            <button class="buy-btn" data-buy="seed" data-item="cabbage">Buy 1x (4🪙)</button>
+          </div>
+          <div class="shop-item-card">
+            <div class="item-emoji">🌻</div>
+            <h4>Sunflower Seeds</h4>
+            <p class="item-desc">Yields +1 Diamond when harvested!</p>
+            <button class="buy-btn" data-buy="seed" data-item="sunflower">Buy 1x (8🪙)</button>
+          </div>
+          <div class="shop-item-card">
+            <div class="item-emoji">🫛</div>
+            <h4>Peashooter Crop</h4>
+            <p class="item-desc">Yields +2 Diamonds!</p>
+            <button class="buy-btn" data-buy="seed" data-item="peashooter">Buy 1x (15🪙)</button>
+          </div>
+          <div class="shop-item-card">
+            <div class="item-emoji">🍓</div>
+            <h4>Strawberry Seeds</h4>
+            <p class="item-desc">Sweet juicy berries +1 Diamond!</p>
+            <button class="buy-btn" data-buy="seed" data-item="strawberry">Buy 1x (12🪙)</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Shop Tab Content: Toys -->
+      <div id="shop-tab-toys" class="shop-tab-content hidden">
+        <div class="shop-grid">
+          <div class="shop-item-card">
+            <div class="item-emoji">🧶</div>
+            <h4>Yarn Fur Ball</h4>
+            <p class="item-desc">Kickable physics ball! Bat with paws (+25 Mood)</p>
+            <button class="buy-btn" data-buy="toy" data-item="furball">Buy 1x (15🪙)</button>
+          </div>
+          <div class="shop-item-card">
+            <div class="item-emoji">🐭</div>
+            <h4>Squeaky Catnip Mouse</h4>
+            <p class="item-desc">Cute squeaky toy (+35 Mood)</p>
+            <button class="buy-btn" data-buy="toy" data-item="catnip">Buy 1x (25🪙)</button>
+          </div>
+          <div class="shop-item-card">
+            <div class="item-emoji">🐟</div>
+            <h4>Tasty Fish Snack</h4>
+            <p class="item-desc">Yummy fish treat (+50 Mood)</p>
+            <button class="buy-btn" data-buy="toy" data-item="fish">Buy 1x (35🪙)</button>
+          </div>
+          <div class="shop-item-card">
+            <div class="item-emoji">🥛</div>
+            <h4>Warm Milk Bowl</h4>
+            <p class="item-desc">Drink milk & purr happily! (+40 Mood)</p>
+            <button class="buy-btn" data-buy="toy" data-item="milk">Buy 1x (20🪙)</button>
+          </div>
+          <div class="shop-item-card">
+            <div class="item-emoji">📦</div>
+            <h4>Cozy Cardboard Box</h4>
+            <p class="item-desc">Hop inside box & sit cozy! (+60 Mood)</p>
+            <button class="buy-btn" data-buy="toy" data-item="box">Buy 1x (30🪙)</button>
+          </div>
+          <div class="shop-item-card">
+            <div class="item-emoji">🛋️</div>
+            <h4>Plush Scratching Post</h4>
+            <p class="item-desc">Scratch post & play! (+45 Mood)</p>
+            <button class="buy-btn" data-buy="toy" data-item="post">Buy 1x (40🪙)</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Shop Tab Content: Weapons -->
+      <div id="shop-tab-weapons" class="shop-tab-content hidden">
+        <div class="shop-grid">
+          <div class="shop-item-card">
+            <div class="item-emoji">🌱</div>
+            <h4>Peashooter Blaster</h4>
+            <p class="item-desc">Standard pea shooter (Velocity: 52.0)</p>
+            <button class="buy-btn equip-weapon-btn" data-buy="weapon" data-item="peashooter">Equip (Free)</button>
+          </div>
+          <div class="shop-item-card">
+            <div class="item-emoji">🥕</div>
+            <h4>Carrot Rocket Sniper</h4>
+            <p class="item-desc">High-velocity carrot rockets with flame trail! (Vel: 85.0)</p>
+            <button class="buy-btn equip-weapon-btn" data-buy="weapon" data-item="carrot">Buy 60🪙</button>
+          </div>
+          <div class="shop-item-card">
+            <div class="item-emoji">🐟</div>
+            <h4>Fishy Bubble Cannon</h4>
+            <p class="item-desc">Arcing fish projectiles with water bubbles! (Vel: 38.0)</p>
+            <button class="buy-btn equip-weapon-btn" data-buy="weapon" data-item="fish">Buy 100🪙 / 2💎</button>
+          </div>
+          <div class="shop-item-card">
+            <div class="item-emoji">🌈</div>
+            <h4>Rainbow Star Wand</h4>
+            <p class="item-desc">Floating rainbow stars & stardust! (Vel: 65.0)</p>
+            <button class="buy-btn equip-weapon-btn" data-buy="weapon" data-item="rainbow">Buy 150🪙 / 3💎</button>
+          </div>
+          <div class="shop-item-card">
+            <div class="item-emoji">⚡</div>
+            <h4>Golden Royal Laser</h4>
+            <p class="item-desc">Ultra-fast golden laser beam! (Vel: 120.0)</p>
+            <button class="buy-btn equip-weapon-btn" data-buy="weapon" data-item="laser">Buy 250🪙 / 5💎</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Shop Tab Content: Materials -->
+      <div id="shop-tab-materials" class="shop-tab-content hidden">
+        <div class="shop-grid">
+          <div class="shop-item-card">
+            <div class="item-emoji">🪵</div>
+            <h4>Wood Plank (<span id="stock-mat-wood">0</span>)</h4>
+            <p class="item-desc">Used for Stage 1 Floor & Stage 2 Cozy Walls!</p>
+            <button class="buy-btn" data-buy="material" data-item="wood">Buy 1x (10🪙)</button>
+          </div>
+          <div class="shop-item-card">
+            <div class="item-emoji">🧱</div>
+            <h4>Stone Brick (<span id="stock-mat-bricks">0</span>)</h4>
+            <p class="item-desc">Used for Stage 1 Foundation & Stage 3 Chimney!</p>
+            <button class="buy-btn" data-buy="material" data-item="bricks">Buy 1x (15🪙)</button>
+          </div>
+          <div class="shop-item-card">
+            <div class="item-emoji">🏠</div>
+            <h4>Pink Roof Tile (<span id="stock-mat-roofTiles">0</span>)</h4>
+            <p class="item-desc">Used for Stage 3 Pink Roof & Eaves!</p>
+            <button class="buy-btn" data-buy="material" data-item="roofTiles">Buy 1x (20🪙)</button>
+          </div>
+          <div class="shop-item-card">
+            <div class="item-emoji">🛋️</div>
+            <h4>Plush Cushion (<span id="stock-mat-cushions">0</span>)</h4>
+            <p class="item-desc">Used for Stage 4 Porch Beds & Cat Lounge!</p>
+            <button class="buy-btn" data-buy="material" data-item="cushions">Buy 1x (30🪙)</button>
+          </div>
+          <div class="shop-item-card">
+            <div class="item-emoji">⭐</div>
+            <h4>Golden Kitty Star (<span id="stock-mat-goldenStars">0</span>)</h4>
+            <p class="item-desc">Used for Stage 4 Royal Peak Crown!</p>
+            <button class="buy-btn" data-buy="material" data-item="goldenStars">Buy 1x (3💎)</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Shop Tab Content: Diamond Exchange -->
+      <div id="shop-tab-diamonds" class="shop-tab-content hidden">
+        <div class="exchange-card">
+          <div class="exchange-icon">💎🪙</div>
+          <h3>Kitty Coin to Diamond Exchange</h3>
+          <p>Convert 100 Kitty Coins into 1 Shiny Diamond!</p>
+          <button id="btn-exchange-diamond" class="action-btn primary">Exchange 100🪙 → +1💎</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Menu / Title Screen Modal -->
+  <div id="main-menu" class="main-menu-overlay hidden">
+    <div class="main-menu-card">
+      <div class="main-menu-header">
+        <div class="menu-cat-icon">🐱🌾</div>
+        <h2>Ginger Tabby's Cozy Farm</h2>
+        <p class="menu-subtitle">Web-Ready 3D Farm Adventure &amp; Asset Hub</p>
+      </div>
+
+      <div class="main-menu-stats">
+        <div class="menu-stat-item">
+          <span class="menu-stat-icon">🪙</span>
+          <div class="menu-stat-info">
+            <label>Coins</label>
+            <span id="menu-coins">0</span>
+          </div>
+        </div>
+        <div class="menu-stat-item">
+          <span class="menu-stat-icon">🥕</span>
+          <div class="menu-stat-info">
+            <label>Crops</label>
+            <span id="menu-crops">0</span>
+          </div>
+        </div>
+        <div class="menu-stat-item">
+          <span class="menu-stat-icon">🎯</span>
+          <div class="menu-stat-info">
+            <label>Pests</label>
+            <span id="menu-pests">0</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="main-menu-actions">
+        <button id="btn-menu-resume" class="menu-btn primary">
+          <span>▶️ Continue Farming</span>
+        </button>
+        <button id="btn-menu-choose-cat" class="menu-btn secondary">
+          <span>🐾 Choose Kitty Character</span>
+        </button>
+        <button id="btn-menu-restart" class="menu-btn tertiary">
+          <span>🔄 New Farm Session</span>
+        </button>
+        <button id="btn-menu-help" class="menu-btn tertiary">
+          <span>🎮 How to Play &amp; Controls</span>
+        </button>
+        <button id="btn-menu-inspect" class="menu-btn quaternary">
+          <span>🔍 3D Model &amp; Animation Inspector</span>
+        </button>
+      </div>
+
+      <div class="main-menu-footer">
+        <p>Built with Three.js &bull; Low-Poly WebGL &bull; Real-time 3D</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Exit Confirmation Modal Dialog -->
+  <div id="exit-confirm-modal" class="confirm-modal-overlay hidden">
+    <div class="confirm-card">
+      <div class="confirm-icon">🚪🐾</div>
+      <h3>Return to Main Menu?</h3>
+      <p>Your current farm session progress will be kept safe.</p>
+      <div class="confirm-buttons">
+        <button id="btn-confirm-exit" class="action-btn primary">Yes, Go to Menu</button>
+        <button id="btn-cancel-exit" class="action-btn secondary">Stay &amp; Play</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- House Construction & Missing Materials Guide Modal -->
+  <div id="house-guide-modal" class="house-guide-modal-overlay hidden">
+    <div class="house-guide-card">
+      <div class="house-guide-header">
+        <div class="house-title">
+          <span class="house-icon">🏰</span>
+          <div>
+            <h2 id="house-guide-title">Kitty Home Construction</h2>
+            <p id="house-guide-style-name">Architectural Style: 🌱 Cozy Log Cabin</p>
+          </div>
+        </div>
+        <button id="btn-close-house-guide" class="icon-btn close-btn">✕</button>
+      </div>
+
+      <!-- Architectural Style Selector -->
+      <div class="house-style-selector">
+        <label class="section-label">Select Architectural Style:</label>
+        <div class="style-buttons-row">
+          <button class="style-btn active" data-style="cabin">🌱 Cozy Log Cabin</button>
+          <button class="style-btn" data-style="fairy">🌸 Pink Fairy Cottage</button>
+          <button class="style-btn" data-style="castle">🏰 Royal Gold Castle</button>
+        </div>
+      </div>
+
+      <!-- Construction Phase Details & Missing Materials List -->
+      <div class="house-phase-box">
+        <h3 id="house-phase-title">Stage 1: Foundation &amp; Floor</h3>
+        <p id="house-phase-desc" class="phase-desc">Build sturdy stone foundation &amp; wooden floor!</p>
+
+        <!-- Dynamic Materials Checklist -->
+        <div class="materials-checklist-container">
+          <h4>Required Building Materials Checklist:</h4>
+          <div id="materials-checklist" class="materials-checklist">
+            <!-- Populated dynamically by JS -->
+          </div>
+        </div>
+
+        <!-- Missing Items Alert Bubble -->
+        <div id="missing-materials-bubble" class="missing-materials-bubble hidden">
+          <div class="bubble-icon">💡</div>
+          <div class="bubble-content">
+            <strong>Friendly Building Guide:</strong>
+            <p id="missing-materials-text">You are missing materials! Visit the shop to purchase missing supplies.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="house-guide-actions">
+        <button id="btn-build-now" class="action-btn primary">
+          <span>🔨 Construct Phase Now</span>
+        </button>
+        <button id="btn-go-to-shop" class="action-btn secondary">
+          <span>🛒 Buy Missing Materials in Shop</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FPS Crosshair and Aiming Scope Overlay -->
+  <div id="crosshair-container" class="crosshair-container">
+    <div class="crosshair-dot"></div>
+    <div class="crosshair-ring"></div>
+    <div class="crosshair-lines">
+      <div class="crosshair-line top"></div>
+      <div class="crosshair-line bottom"></div>
+      <div class="crosshair-line left"></div>
+      <div class="crosshair-line right"></div>
+    </div>
+  </div>
+
+  <div id="sniper-scope" class="sniper-scope hidden">
+    <div class="scope-overlay"></div>
+    <div class="scope-cross-horizontal"></div>
+    <div class="scope-cross-vertical"></div>
+    <div class="scope-range-numbers">
+      <span>100m</span>
+      <span>200m</span>
+      <span>300m</span>
+    </div>
+  </div>
+
+  <!-- Quest / Objective Banner -->
+  <div id="quest-banner" class="quest-banner">
+    <div class="quest-icon">🎯</div>
+    <div class="quest-info">
+      <span class="quest-label">Active Task:</span>
+      <span id="quest-text" class="quest-desc">Waddle through the farm and harvest 3 ripe crops with [E]!</span>
+    </div>
+  </div>
+
+  <!-- Interaction Prompt (floating in 3D or center HUD) -->
+  <div id="interaction-prompt" class="interaction-prompt hidden">
+    <div class="prompt-bubble">
+      <span class="prompt-key" id="prompt-key">E</span>
+      <span class="prompt-text" id="prompt-text">Harvest Carrot</span>
+    </div>
+  </div>
+
+  <!-- In-game Notification / Toast -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Model Inspector / Animation Showcase Modal -->
+  <div id="inspector-panel" class="inspector-panel hidden">
+    <div class="inspector-header">
+      <div class="inspector-title">
+        <span class="cat-avatar">🐱</span>
+        <div>
+          <h3>Character & Scene Inspector</h3>
+          <p>Low-Poly Chubby Ginger Tabby Cat (&lt;15k Triangles)</p>
+        </div>
+      </div>
+      <button id="btn-close-inspector" class="icon-btn close-btn">✕</button>
+    </div>
+
+    <div class="inspector-body">
+      <div class="inspector-section">
+        <label class="section-label">Animation Clips (Embedded in .GLB):</label>
+        <div class="anim-grid">
+          <button class="anim-btn active" data-anim="Idle">
+            <span class="anim-emoji">🐱💤</span>
+            <span class="anim-name">1. Idle</span>
+            <span class="anim-desc">Breathing & Tail Sway</span>
+          </button>
+          <button class="anim-btn" data-anim="Walk">
+            <span class="anim-emoji">🐾🏃</span>
+            <span class="anim-name">2. Walk</span>
+            <span class="anim-desc">Bipedal Waddling Cycle</span>
+          </button>
+          <button class="anim-btn" data-anim="Action">
+            <span class="anim-emoji">🌿🔫</span>
+            <span class="anim-name">3. Action</span>
+            <span class="anim-desc">Peashooter Recoil & Fire</span>
+          </button>
+          <button class="anim-btn" data-anim="Gather">
+            <span class="anim-emoji">🥕🌾</span>
+            <span class="anim-name">4. Gather</span>
+            <span class="anim-desc">Crop Harvesting Bend</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="inspector-section">
+        <label class="section-label">Character Accessories & Gear:</label>
+        <div class="toggle-row">
+          <label class="toggle-chip">
+            <input type="checkbox" id="toggle-helmet" checked />
+            <span>🪖 Military Helmet</span>
+          </label>
+          <label class="toggle-chip">
+            <input type="checkbox" id="toggle-bandana" checked />
+            <span>🧣 Red Bandana</span>
+          </label>
+          <label class="toggle-chip">
+            <input type="checkbox" id="toggle-peashooter" checked />
+            <span>🌱 Peashooter Gun</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="inspector-section">
+        <label class="section-label">Lighting & Environment:</label>
+        <div class="chip-group">
+          <button class="chip active" data-tod="day">☀️ Cozy Noon</button>
+          <button class="chip" data-tod="sunset">🌅 Golden Sunset</button>
+          <button class="chip" data-tod="night">🌙 Warm Lantern Night</button>
+          <button class="chip" data-tod="studio">💡 Studio Turntable</button>
+        </div>
+      </div>
+
+      <div class="inspector-section export-section">
+        <label class="section-label">Download 3D Assets (.GLB):</label>
+        <div class="export-btn-group">
+          <button id="btn-export-character-glb" class="action-btn primary">
+            <span class="btn-icon">🐱</span>
+            <span>Download Character .GLB (4 Clips)</span>
+          </button>
+          <button id="btn-export-scene-glb" class="action-btn secondary">
+            <span class="btn-icon">🌾</span>
+            <span>Download Full Farm Scene .GLB</span>
+          </button>
+        </div>
+        <p class="export-note">✓ Compatible with Three.js, React Three Fiber, Blender, Babylon.js, Godot, and Unity</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Controls / Help Modal -->
+  <div id="help-modal" class="help-modal hidden">
+    <div class="help-card">
+      <div class="help-header">
+        <h3>🎮 Game Controls & Guide</h3>
+        <button id="btn-close-help" class="icon-btn close-btn">✕</button>
+      </div>
+      <div class="help-grid">
+        <div class="help-item">
+          <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> or <kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd>
+          <span>Move / Waddle</span>
+        </div>
+        <div class="help-item">
+          <kbd>Shift</kbd>
+          <span>Sprint / Fast Trot</span>
+        </div>
+        <div class="help-item">
+          <kbd>Space</kbd>
+          <span>Cute Cat Hop</span>
+        </div>
+        <div class="help-item">
+          <kbd>Mouse Move</kbd>
+          <span>Look / Aim Around (FPS & Third-Person)</span>
+        </div>
+        <div class="help-item">
+          <kbd>Left Click</kbd> or <kbd>F</kbd>
+          <span>Shoot Peashooter Gun</span>
+        </div>
+        <div class="help-item">
+          <kbd>Right Click (Hold)</kbd>
+          <span>Zoom In / ADS Precision Scope (FPS Aim)</span>
+        </div>
+        <div class="help-item">
+          <kbd>V</kbd>
+          <span>Toggle First-Person (FPS) / Third-Person (TPS)</span>
+        </div>
+        <div class="help-item">
+          <kbd>Scroll Wheel</kbd>
+          <span>Smooth Zoom In & Out</span>
+        </div>
+        <div class="help-item">
+          <kbd>E</kbd> or <kbd>Enter</kbd>
+          <span>Gather / Harvest Crops</span>
+        </div>
+      </div>
+      <div class="help-footer">
+        <p>💡 Tip: Click canvas to lock mouse for smooth FPS shooter controls! Press [V] anytime to switch view mode!</p>
+        <button id="btn-start-playing" class="action-btn primary">Let's Play!</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Control Bar (Desktop Quick Hotkeys + Mobile Friendly) -->
+  <footer id="bottom-hud" class="bottom-hud">
+    <div class="controls-hint">
+      <span class="hint-item"><kbd>WASD</kbd> Move</span>
+      <span class="hint-item"><kbd>Mouse</kbd> Aim</span>
+      <span class="hint-item"><kbd>L-Click</kbd> Shoot</span>
+      <span class="hint-item"><kbd>R-Click</kbd> Zoom Scope</span>
+      <span class="hint-item"><kbd>V</kbd> FPS/TPS</span>
+      <span class="hint-item"><kbd>E</kbd> Harvest</span>
+      <span class="hint-item"><kbd>Space</kbd> Hop</span>
+    </div>
+
+    <!-- Mobile Action Buttons -->
+    <div id="mobile-controls" class="mobile-controls">
+      <div id="joystick-zone" class="joystick-zone">
+        <div id="joystick-base" class="joystick-base">
+          <div id="joystick-stick" class="joystick-stick"></div>
+        </div>
+      </div>
+      <div class="mobile-action-buttons">
+        <button id="mobile-btn-shoot" class="mobile-btn action-shoot" title="Shoot Pea">
+          <span>🌿</span>
+          <label>SHOOT</label>
+        </button>
+        <button id="mobile-btn-gather" class="mobile-btn action-gather" title="Harvest Crop">
+          <span>🥕</span>
+          <label>GATHER</label>
+        </button>
+        <button id="mobile-btn-jump" class="mobile-btn action-jump" title="Jump">
+          <span>⬆️</span>
+          <label>HOP</label>
+        </button>
+      </div>
+    </div>
+  </footer>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
