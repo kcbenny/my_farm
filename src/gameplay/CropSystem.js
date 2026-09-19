@@ -1,9 +1,11 @@
 import * as THREE from 'three';
+import { ModularCropModels } from '../world/ModularCropModels.js';
 
 export class CropSystem {
-  constructor(scene, gardenPlots) {
+  constructor(scene, gardenPlots, worldPhysics = null) {
     this.scene = scene;
     this.gardenPlots = gardenPlots;
+    this.worldPhysics = worldPhysics;
     this.crops = [];
     this.particles = [];
 
@@ -36,18 +38,23 @@ export class CropSystem {
 
       offsets.forEach(offset => {
         const plotY = plot.y || 0;
-        const worldPos = new THREE.Vector3(plot.x + offset.x, plotY + 0.25, plot.z + offset.z);
-        const cropInstance = this.createCropMesh(plot.type);
+        const worldPos = new THREE.Vector3(plot.x + offset.x, plotY + 0.36, plot.z + offset.z);
+        const placement = this.worldPhysics?.validatePlacement(worldPos, new THREE.Vector3(0.6, 1, 0.6));
+        if (placement && !placement.valid) return;
+        if (placement) worldPos.y = placement.height;
+        const cropInstance = this.createCropMesh(plot.type, 'mature');
         cropInstance.position.copy(worldPos);
         this.scene.add(cropInstance);
+        cropInstance.userData.type = 'crop';
+        this.worldPhysics?.register(cropInstance);
 
         this.crops.push({
           type: plot.type,
           mesh: cropInstance,
           position: worldPos,
-          stage: 'ripe', // 'sprout', 'growing', 'ripe'
+          stage: 'mature', // 'sprout', 'early', 'mature', 'wilted', 'empty'
           growthTimer: 0,
-          regrowDelay: 4.5 + Math.random() * 2,
+          growDuration: 5.0,
           scale: 1.0,
           plotName: plot.name
         });
@@ -55,7 +62,15 @@ export class CropSystem {
     });
   }
 
-  createCropMesh(type) {
+  createCropMesh(type, stage = 'mature') {
+    const t = type.toLowerCase();
+    if (t === 'wheat' || t === 'corn' || t === 'tomato' || t === 'tomatoes' || t === 'carrot' || t === 'carrots') {
+      return ModularCropModels.createCrop(t, stage);
+    }
+    if (t === 'wilted') {
+      return ModularCropModels.createCrop('wheat', 'wilted');
+    }
+
     const group = new THREE.Group();
     group.name = `Crop_${type}`;
 
@@ -204,7 +219,7 @@ export class CropSystem {
     let minDist = maxDist;
 
     for (const crop of this.crops) {
-      if (crop.stage === 'ripe') {
+      if (crop.stage === 'mature' || crop.stage === 'ripe') {
         const dist = playerPos.distanceTo(crop.position);
         if (dist < minDist) {
           minDist = dist;
@@ -220,7 +235,7 @@ export class CropSystem {
     let minDist = maxDist;
 
     for (const crop of this.crops) {
-      if (crop.stage === 'empty') {
+      if (crop.stage === 'empty' || crop.stage === 'wilted') {
         const dist = playerPos.distanceTo(crop.position);
         if (dist < minDist) {
           minDist = dist;
@@ -232,35 +247,48 @@ export class CropSystem {
   }
 
   plantSeed(crop, seedType) {
-    if (crop.stage !== 'empty') return false;
+    if (crop.stage !== 'empty' && crop.stage !== 'wilted') return false;
+    const placement = this.worldPhysics?.validatePlacement(crop.position, new THREE.Vector3(0.6, 1, 0.6));
+    if (placement && !placement.valid) return false;
+    if (placement) crop.position.y = placement.height;
 
+    this.worldPhysics?.unregister(crop.mesh);
     this.scene.remove(crop.mesh);
 
     crop.type = seedType;
-    crop.mesh = this.createCropMesh(seedType);
+    crop.stage = 'sprout';
+    crop.growthTimer = 0;
+    crop.growDuration = 6.0;
+    crop.mesh = this.createCropMesh(seedType, 'sprout');
     crop.mesh.position.copy(crop.position);
-    crop.stage = 'growing';
-    crop.scale = 0.1;
-    crop.mesh.scale.set(0.1, 0.1, 0.1);
+    crop.scale = 1.0;
     this.scene.add(crop.mesh);
+    crop.mesh.userData.type = 'crop';
+    this.worldPhysics?.register(crop.mesh);
 
     this.spawnHarvestParticles(crop.position, seedType);
     return true;
   }
 
   harvestCrop(crop) {
-    if (crop.stage !== 'ripe') return null;
+    if (crop.stage !== 'mature' && crop.stage !== 'ripe') return null;
 
-    // Harvest crop -> turns into empty soil plot! No automatic respawn!
+    // Harvest crop -> turns into harvested / wilted plot!
     this.spawnHarvestParticles(crop.position, crop.type);
 
+    this.worldPhysics?.unregister(crop.mesh);
     this.scene.remove(crop.mesh);
-    crop.stage = 'empty';
-    crop.mesh = this.createCropMesh('empty');
+    crop.stage = 'wilted';
+    crop.mesh = this.createCropMesh(crop.type, 'wilted');
     crop.mesh.position.copy(crop.position);
     this.scene.add(crop.mesh);
+    crop.mesh.userData.type = 'crop';
+    this.worldPhysics?.register(crop.mesh);
 
     const rewards = {
+      wheat: { name: 'Golden Wheat Sheaf', emoji: '🌾', coins: 14, kittyCoins: 1, diamonds: 0 },
+      corn: { name: 'Sweet Golden Corn', emoji: '🌽', coins: 20, kittyCoins: 1, diamonds: 0 },
+      tomato: { name: 'Vine Ripe Tomato', emoji: '🍅', coins: 24, kittyCoins: 0, diamonds: 1 },
       carrot: { name: 'Fresh Carrot', emoji: '🥕', coins: 15, kittyCoins: 1, diamonds: 0 },
       pumpkin: { name: 'Plump Pumpkin', emoji: '🎃', coins: 30, kittyCoins: 2, diamonds: 0 },
       cabbage: { name: 'Crisp Cabbage', emoji: '🥬', coins: 12, kittyCoins: 1, diamonds: 0 },
@@ -274,6 +302,9 @@ export class CropSystem {
 
   spawnHarvestParticles(pos, cropType) {
     const colors = {
+      wheat: [0xf7d070, 0xe0a93b, 0xa37220],
+      corn: [0xf9c724, 0x72b036, 0xffdd53],
+      tomato: [0xdc1f2a, 0xf23535, 0x38b000],
       carrot: [0xff6b35, 0x38b000, 0xffd166],
       pumpkin: [0xf77f00, 0xffba08, 0x472d1a],
       cabbage: [0x70e000, 0x9ef01a, 0x38b000],
@@ -310,19 +341,46 @@ export class CropSystem {
   }
 
   update(delta) {
-    // 1. Grow planted crops
+    // 1. Grow planted crops through 4 distinct stages
     for (const crop of this.crops) {
-      if (crop.stage === 'growing') {
-        crop.scale += delta * 0.25; // Grows smoothly in ~4 seconds
+      if (crop.stage === 'sprout') {
+        crop.growthTimer += delta;
+        if (crop.growthTimer >= crop.growDuration * 0.4) {
+          // Transition: Sprout -> Early Growth
+          this.worldPhysics?.unregister(crop.mesh);
+          this.scene.remove(crop.mesh);
+          crop.stage = 'early';
+          crop.mesh = this.createCropMesh(crop.type, 'early');
+          crop.mesh.position.copy(crop.position);
+          this.scene.add(crop.mesh);
+          crop.mesh.userData.type = 'crop';
+          this.worldPhysics?.register(crop.mesh);
+        }
+      } else if (crop.stage === 'early') {
+        crop.growthTimer += delta;
+        if (crop.growthTimer >= crop.growDuration) {
+          // Transition: Early Growth -> Mature
+          this.worldPhysics?.unregister(crop.mesh);
+          this.scene.remove(crop.mesh);
+          crop.stage = 'mature';
+          crop.mesh = this.createCropMesh(crop.type, 'mature');
+          crop.mesh.position.copy(crop.position);
+          this.scene.add(crop.mesh);
+          crop.mesh.userData.type = 'crop';
+          this.worldPhysics?.register(crop.mesh);
+        }
+      } else if (crop.stage === 'growing') {
+        // Fallback for custom seeds
+        crop.scale += delta * 0.25;
         if (crop.scale >= 1.0) {
           crop.scale = 1.0;
-          crop.stage = 'ripe';
+          crop.stage = 'mature';
         }
         crop.mesh.scale.set(crop.scale, crop.scale, crop.scale);
-      } else if (crop.stage === 'ripe') {
-        // Subtle gentle breathing bounce
-        const bounce = 1.0 + Math.sin(Date.now() * 0.003 + crop.position.x) * 0.04;
-        crop.mesh.scale.set(bounce, bounce, bounce);
+      } else if (crop.stage === 'mature' || crop.stage === 'ripe') {
+        // Subtle wind sway
+        const sway = Math.sin(Date.now() * 0.002 + crop.position.x * 2) * 0.04;
+        crop.mesh.rotation.z = sway;
       }
     }
 

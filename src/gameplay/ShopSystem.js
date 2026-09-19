@@ -7,6 +7,9 @@ export class ShopSystem {
 
     // Seed Inventory
     this.seeds = {
+      wheat: 5,        // Start with 5 wheat seeds
+      corn: 4,         // Start with 4 corn seeds
+      tomato: 4,       // Start with 4 tomato seeds
       carrot: 5,       // Start with 5 carrot seeds
       pumpkin: 2,      // Start with 2 pumpkin seeds
       cabbage: 3,
@@ -15,7 +18,7 @@ export class ShopSystem {
       strawberry: 2
     };
 
-    this.activeSeed = 'carrot'; // Currently selected seed to plant
+    this.activeSeed = 'wheat'; // Currently selected seed to plant
 
     // Building Materials Inventory
     this.materials = {
@@ -39,6 +42,9 @@ export class ShopSystem {
     // Catalog Definitions & Prices
     this.catalog = {
       seeds: {
+        wheat: { name: 'Golden Wheat Seed 🌾', costCoins: 4, yieldCoins: 14, yieldKittyCoins: 1, growTime: 4, emoji: '🌾' },
+        corn: { name: 'Sweet Corn Seed 🌽', costCoins: 6, yieldCoins: 20, yieldKittyCoins: 1, growTime: 6, emoji: '🌽' },
+        tomato: { name: 'Vine Tomato Seed 🍅', costCoins: 8, yieldCoins: 24, yieldDiamonds: 1, growTime: 7, emoji: '🍅' },
         carrot: { name: 'Carrot Seed 🥕', costCoins: 5, yieldCoins: 15, yieldKittyCoins: 1, growTime: 5, emoji: '🥕' },
         pumpkin: { name: 'Pumpkin Seed 🎃', costCoins: 10, yieldCoins: 30, yieldKittyCoins: 2, growTime: 9, emoji: '🎃' },
         cabbage: { name: 'Cabbage Seed 🥬', costCoins: 4, yieldCoins: 12, yieldKittyCoins: 1, growTime: 4, emoji: '🥬' },

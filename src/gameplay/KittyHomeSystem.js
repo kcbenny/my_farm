@@ -1,14 +1,20 @@
 import * as THREE from 'three';
 
 export class KittyHomeSystem {
-  constructor(scene, soundSystem, getTerrainHeight) {
+  constructor(scene, soundSystem, getTerrainHeight, worldPhysics = null) {
     this.scene = scene;
     this.sound = soundSystem;
     this.getTerrainHeight = getTerrainHeight || ((x, z) => 0);
+    this.worldPhysics = worldPhysics;
+    this.placementSize = new THREE.Vector3(8, 5.5, 8);
+    this.placementActive = false;
+    this.placementPoint = null;
 
     // Site position
     this.position = new THREE.Vector3(12.5, 0, 12.5);
     this.position.y = this.getTerrainHeight(this.position.x, this.position.z);
+    const placement = worldPhysics?.findPlacement(this.position, this.placementSize);
+    if (placement) this.position.copy(placement);
 
     this.stage = 0; // 0: Blueprint, 1: Foundation, 2: Walls & Door, 3: Roof & Chimney, 4: Deluxe Castle!
     this.maxStage = 4;
@@ -24,6 +30,54 @@ export class KittyHomeSystem {
     this.particles = [];
 
     this.initHomeSite();
+    this.placementPreview = new THREE.Mesh(
+      new THREE.BoxGeometry(this.placementSize.x, 0.15, this.placementSize.z),
+      new THREE.MeshBasicMaterial({ color: 0x36d65b, transparent: true, opacity: 0.45, depthWrite: false })
+    );
+    this.placementPreview.name = 'Home_Placement_Preview';
+    this.placementPreview.userData.physics = false;
+    this.placementPreview.visible = false;
+    this.scene.add(this.placementPreview);
+  }
+
+  validateSite(position = this.position) {
+    this.worldPhysics?.update();
+    return this.worldPhysics?.validatePlacement(position, this.placementSize, this.mainGroup) || { valid: true };
+  }
+
+  setPlacementMode(active) {
+    if (active && this.stage > 0) return false;
+    this.placementActive = active;
+    this.placementPoint = null;
+    this.placementPreview.visible = active;
+    this.placementPreview.material.color.setHex(0xe53935);
+    this.placementPreview.position.copy(this.position).add(new THREE.Vector3(0, 0.15, 0));
+    return true;
+  }
+
+  updatePlacement(camera, pointer = new THREE.Vector2()) {
+    if (!this.placementActive || !this.worldPhysics) return;
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(pointer, camera);
+    raycaster.far = 30;
+    const hit = raycaster.intersectObjects(this.worldPhysics.surfaces.map(entry => entry.proxy), false)[0];
+    this.placementPoint = hit?.point.clone() || null;
+    const result = hit ? this.validateSite(hit.point) : { valid: false, reason: 'No ground' };
+    this.placementPreview.material.color.setHex(result.valid ? 0x36d65b : 0xe53935);
+    if (hit) this.placementPreview.position.copy(hit.point).add(new THREE.Vector3(0, 0.15, 0));
+    if (this.worldPhysics.debug && result.reason !== this.placementReason) console.debug('[placement]', result);
+    this.placementReason = result.reason;
+  }
+
+  confirmPlacement() {
+    if (!this.placementActive || !this.placementPoint) return false;
+    const result = this.validateSite(this.placementPoint);
+    if (!result.valid) return false;
+    this.position.copy(this.placementPoint);
+    this.position.y = result.height;
+    this.mainGroup.position.copy(this.position);
+    this.setPlacementMode(false);
+    return true;
   }
 
   setStyle(styleKey) {
@@ -74,6 +128,7 @@ export class KittyHomeSystem {
   rebuildHomeMesh() {
     // Remove previous home meshes
     if (this.homeMeshGroup) {
+      this.worldPhysics?.unregister(this.homeMeshGroup);
       this.mainGroup.remove(this.homeMeshGroup);
     }
 
@@ -98,6 +153,7 @@ export class KittyHomeSystem {
       const foundationGeom = new THREE.BoxGeometry(4.6, 0.4, 4.6);
       const foundation = new THREE.Mesh(foundationGeom, this.materials.brickBase);
       foundation.position.y = 0.2;
+      foundation.userData.type = 'farmland';
       foundation.castShadow = true;
       foundation.receiveShadow = true;
       this.homeMeshGroup.add(foundation);
@@ -105,6 +161,7 @@ export class KittyHomeSystem {
       const floorGeom = new THREE.BoxGeometry(4.2, 0.15, 4.2);
       const floor = new THREE.Mesh(floorGeom, this.materials.woodFloor);
       floor.position.y = 0.45;
+      floor.userData.type = 'farmland';
       floor.castShadow = true;
       floor.receiveShadow = true;
       this.homeMeshGroup.add(floor);
@@ -227,9 +284,9 @@ export class KittyHomeSystem {
       this.homeMeshGroup.add(scratchPlatform);
     }
 
-    // Bounce-in animation scale
-    this.homeMeshGroup.scale.set(0.01, 0.01, 0.01);
+    this.homeMeshGroup.scale.setScalar(1);
     this.mainGroup.add(this.homeMeshGroup);
+    if (this.stage > 0) this.worldPhysics?.register(this.homeMeshGroup, 'house');
   }
 
   getStageRequirements() {
@@ -381,6 +438,7 @@ export class KittyHomeSystem {
 
   upgradeStage() {
     if (this.stage >= this.maxStage) return false;
+    if (this.placementActive || !this.validateSite().valid) return false;
 
     this.stage++;
     this.rebuildHomeMesh();

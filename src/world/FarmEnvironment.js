@@ -3,12 +3,17 @@ import { BarnModel } from './BarnModel.js';
 import { WindmillModel } from './WindmillModel.js';
 import { PondModel } from './PondModel.js';
 import { ShopStallModel } from './ShopStallModel.js';
+import { CozySceneModels } from './CozySceneModels.js';
+import { ModularTileSystem } from './ModularTileSystem.js';
+import { WorldPhysics, normalizeAsset } from '../gameplay/WorldPhysics.js';
 
 export class FarmEnvironment {
   constructor(scene) {
     this.scene = scene;
+    this.physics = new WorldPhysics(scene, { debug: typeof location !== 'undefined' && new URLSearchParams(location.search).has('physicsDebug') });
     this.animatedObjects = [];
-    this.colliders = [];
+    this.collidableObjects = [];
+    this.boundaryObjects = [];
     this.gardenPlots = [];
     this.trees = [];
 
@@ -96,43 +101,24 @@ export class FarmEnvironment {
 
     // 3. Rustic Wooden Barn Silhouette (Background)
     const barn = BarnModel.createBarn();
-    barn.position.set(-14, this.getTerrainHeight(-14, -22), -22);
     barn.rotation.y = 0.25;
-    this.scene.add(barn);
-
-    // Register Barn Colliders (Barn box, silo circle, hay bales)
-    this.addBoxCollider(-14, -22, 10.8, 14.8, 0.25);
-    this.addCircleCollider(-6.9, -22.3, 2.6); // Silo
-    this.addCircleCollider(-18.2, -14.2, 2.2); // Hay bales
+    this.placeStructure(barn, new THREE.Vector3(-14, 0, -22), 'farm');
 
     // 4. Rustic Windmill
     const { group: windmill, sailsHub } = WindmillModel.createWindmill();
-    windmill.position.set(22, this.getTerrainHeight(22, -16), -16);
     windmill.rotation.y = -0.6;
-    this.scene.add(windmill);
     this.windmillSails = sailsHub;
-
-    // Register Windmill Collider
-    this.addCircleCollider(22, -16, 3.4);
+    this.placeStructure(windmill, new THREE.Vector3(22, 0, -16), 'farm', 7);
 
     // 5. Cozy Pond
     const pond = PondModel.createPond();
-    pond.position.set(-18, this.getTerrainHeight(-18, 10), 10);
-    this.scene.add(pond);
+    this.placeStructure(pond, new THREE.Vector3(-18, 0, 10), 'obstacle', null);
 
     // 6. Realistic 3D Cute Shop Stall
     const shopStall = ShopStallModel.createShopStall();
-    const shopY = this.getTerrainHeight(-10, -4);
-    shopStall.position.set(-10, shopY, -4);
     shopStall.rotation.y = 0.35; // Angle slightly toward center pathway
-    this.scene.add(shopStall);
-    this.shopStallPos = new THREE.Vector3(-10, shopY, -4);
-
-    // Register Shop Stall Collider
-    this.addBoxCollider(-10, -4, 5.2, 4.2, 0.35);
-
-    // Register Pond Basin Collider
-    this.addCircleCollider(-18, 10, 5.0);
+    this.placeStructure(shopStall, new THREE.Vector3(-10, 0, -4), 'farm');
+    this.shopStallPos = shopStall.position.clone();
 
     // 6. Raised Garden Beds / Crop Plots
     this.createGardenPlots();
@@ -148,6 +134,32 @@ export class FarmEnvironment {
 
     // 10. Cozy Campfires & Outdoor Lantern Lights
     this.createCampfiresAndLanterns();
+
+    // 11. Extra diorama-inspired cozy scenes matching the Dribbble low-poly look
+    this.addCozySceneProps();
+
+    // 12. Modular 1m x 1m Terraforming Soil & Environment Blocks Display
+    this.createModularTerraformingDisplay();
+
+    // 13. Livestock Pasture Fences (Cow, Chicken, Sheep, Pig enclosure)
+    this.createLivestockPastureFences();
+  }
+
+  placeStructure(object, desiredPosition, type, targetHeight) {
+    normalizeAsset(object, type, targetHeight);
+    const box = new THREE.Box3().setFromObject(object);
+    const size = box.getSize(new THREE.Vector3());
+    const centerOffset = box.getCenter(new THREE.Vector3()).sub(object.position);
+    const placement = this.physics.findPlacement(desiredPosition.clone().add(centerOffset), size);
+    if (!placement) {
+      if (this.physics.debug) console.warn('[placement] no site', object.name);
+      return false;
+    }
+    object.position.set(placement.x - centerOffset.x, placement.y + object.position.y - box.min.y, placement.z - centerOffset.z);
+    object.userData.type = type;
+    this.scene.add(object);
+    this.registerCollidableObject(object, type === 'tree' ? 'tree' : 'structure');
+    return true;
   }
 
   getTerrainHeight(x, z) {
@@ -217,8 +229,11 @@ export class FarmEnvironment {
     const terrain = new THREE.Mesh(geom, this.materials.grass);
     terrain.receiveShadow = true;
     terrain.name = 'Terrain_Ground';
+    terrain.userData.isTerrain = true;
+    terrain.userData.type = 'grass';
     this.scene.add(terrain);
     this.terrainMesh = terrain;
+    this.registerCollidableObject(terrain, 'terrain');
   }
 
   createWindingPath() {
@@ -239,6 +254,7 @@ export class FarmEnvironment {
 
     const pathGroup = new THREE.Group();
     pathGroup.name = 'Winding_Dirt_Path';
+    pathGroup.userData.type = 'road';
 
     for (let i = 0; i < pathSamples.length; i++) {
       const p = pathSamples[i];
@@ -266,26 +282,32 @@ export class FarmEnvironment {
     }
 
     this.scene.add(pathGroup);
+    this.physics.register(pathGroup);
   }
 
   createGardenPlots() {
     const plotPositions = [
       { x: -5, z: 2, type: 'carrot', name: 'Carrot Patch' },
-      { x: 5, z: -2, type: 'pumpkin', name: 'Pumpkin Patch' },
-      { x: 7, z: 8, type: 'cabbage', name: 'Cabbage Bed' },
-      { x: -6, z: 10, type: 'sunflower', name: 'Sunflower Meadow' },
+      { x: 5, z: -2, type: 'wheat', name: 'Golden Wheat Field' },
+      { x: 7, z: 8, type: 'corn', name: 'Tall Corn Field' },
+      { x: -6, z: 10, type: 'tomato', name: 'Vine Tomato Trellis' },
     ];
 
     plotPositions.forEach((plotData, idx) => {
+      const placement = this.physics.findPlacement(new THREE.Vector3(plotData.x, 0, plotData.z), new THREE.Vector3(4.5, 1.5, 4.5));
+      if (!placement) return;
+      plotData.x = placement.x;
+      plotData.z = placement.z;
       const plotGroup = new THREE.Group();
       plotGroup.name = `Garden_Plot_${idx}`;
-      const groundY = this.getTerrainHeight(plotData.x, plotData.z);
+      const groundY = placement.y;
       plotGroup.position.set(plotData.x, groundY, plotData.z);
 
       // Wooden garden border box
       const borderGeom = new THREE.BoxGeometry(4.4, 0.3, 4.4);
       const borderMesh = new THREE.Mesh(borderGeom, this.materials.woodFence);
       borderMesh.position.y = 0.15;
+      borderMesh.userData.type = 'farmland';
       borderMesh.castShadow = true;
       borderMesh.receiveShadow = true;
       plotGroup.add(borderMesh);
@@ -294,6 +316,7 @@ export class FarmEnvironment {
       const soilGeom = new THREE.BoxGeometry(4.0, 0.35, 4.0);
       const soilMesh = new THREE.Mesh(soilGeom, this.materials.soilBed);
       soilMesh.position.y = 0.18;
+      soilMesh.userData.type = 'farmland';
       soilMesh.receiveShadow = true;
       plotGroup.add(soilMesh);
 
@@ -312,6 +335,7 @@ export class FarmEnvironment {
       plotGroup.add(sign);
 
       this.scene.add(plotGroup);
+      this.registerCollidableObject(plotGroup, 'structure');
       this.gardenPlots.push({
         group: plotGroup,
         x: plotData.x,
@@ -345,20 +369,21 @@ export class FarmEnvironment {
 
     treeLocations.forEach(loc => {
       const tree = this.buildTree(loc.type, loc.scale);
-      const groundY = this.getTerrainHeight(loc.x, loc.z);
-      tree.position.set(loc.x, groundY, loc.z);
+      normalizeAsset(tree, 'tree', 3 + loc.scale);
+      const size = new THREE.Box3().setFromObject(tree).getSize(new THREE.Vector3());
+      const placement = this.physics.findPlacement(new THREE.Vector3(loc.x, 0, loc.z), size);
+      if (!placement) return;
+      tree.position.copy(placement);
       this.scene.add(tree);
       this.trees.push(tree);
+      this.registerCollidableObject(tree, 'tree');
 
-      // Register Tree Trunk Collider
-      this.addCircleCollider(loc.x, loc.z, 0.65 * loc.scale);
     });
   }
 
   buildTree(type = 'oak', scale = 1.0) {
     const treeGroup = new THREE.Group();
-    treeGroup.name = `Tree_${type}`;
-
+    treeGroup.name = `${type}_Tree`;
     // Trunk
     const trunkGeom = new THREE.CylinderGeometry(0.3 * scale, 0.45 * scale, 2.5 * scale, 6);
     const trunk = new THREE.Mesh(trunkGeom, this.materials.treeTrunk);
@@ -426,9 +451,6 @@ export class FarmEnvironment {
     const railGeom = new THREE.BoxGeometry(2.4, 0.12, 0.08);
 
     const createFenceSection = (x1, z1, x2, z2) => {
-      // Register physical solid barricade collider
-      this.addSegmentCollider(x1, z1, x2, z2, 0.35);
-
       const start = new THREE.Vector3(x1, this.getTerrainHeight(x1, z1), z1);
       const end = new THREE.Vector3(x2, this.getTerrainHeight(x2, z2), z2);
       const dist = start.distanceTo(end);
@@ -439,6 +461,8 @@ export class FarmEnvironment {
         const postX = THREE.MathUtils.lerp(x1, x2, t);
         const postZ = THREE.MathUtils.lerp(z1, z2, t);
         const postY = this.getTerrainHeight(postX, postZ);
+
+        if (!this.physics.validatePlacement(new THREE.Vector3(postX, postY, postZ), new THREE.Vector3(0.2, 1.2, 0.2)).valid) continue;
 
         const post = new THREE.Mesh(postGeom, this.materials.woodFence);
         post.position.set(postX, postY + 0.6, postZ);
@@ -456,6 +480,7 @@ export class FarmEnvironment {
           const midY = (postY + nextY) * 0.5;
           const angle = Math.atan2(nextZ - postZ, nextX - postX);
           const segDist = Math.sqrt((nextX - postX)**2 + (nextZ - postZ)**2);
+          if (this.physics.overlapsRoad(midX, midZ, Math.abs(nextX - postX) / 2 + 0.1, Math.abs(nextZ - postZ) / 2 + 0.1)) continue;
 
           // Top rail
           const railTop = new THREE.Mesh(railGeom, this.materials.woodFence);
@@ -483,164 +508,132 @@ export class FarmEnvironment {
     createFenceSection(12, 16, 12, 24);    // Front right boundary fence
 
     this.scene.add(fenceGroup);
+    this.physics.register(fenceGroup, 'obstacle');
   }
 
-  addSegmentCollider(x1, z1, x2, z2, radius = 0.35) {
-    this.colliders.push({
-      type: 'segment',
-      x1, z1, x2, z2,
-      radius
-    });
-  }
+  createModularTerraformingDisplay() {
+    const displayGroup = new THREE.Group();
+    displayGroup.name = 'Modular_Terraforming_Blocks_Showcase';
 
-  addCircleCollider(x, z, radius) {
-    this.colliders.push({
-      type: 'circle',
-      x, z,
-      radius
-    });
-  }
+    // 5 Types of 1m x 1m Modular Tiles arranged seamlessly
+    const tileTypes = ['untilled', 'tilled', 'watered', 'grass', 'rocks'];
+    const originX = 1.0;
+    const originZ = 4.5;
 
-  addBoxCollider(cx, cz, width, depth, angle = 0) {
-    this.colliders.push({
-      type: 'box',
-      cx, cz,
-      hw: width * 0.5,
-      hd: depth * 0.5,
-      angle
-    });
-  }
-
-  resolveCollision(pos, playerRadius = 0.45) {
-    const iterations = 3;
-    for (let iter = 0; iter < iterations; iter++) {
-      for (let i = 0; i < this.colliders.length; i++) {
-        const col = this.colliders[i];
-
-        if (col.type === 'segment') {
-          const abx = col.x2 - col.x1;
-          const abz = col.z2 - col.z1;
-          const apx = pos.x - col.x1;
-          const apz = pos.z - col.z1;
-          const abLenSq = abx * abx + abz * abz;
-
-          if (abLenSq > 0) {
-            let t = (apx * abx + apz * abz) / abLenSq;
-            t = Math.max(0, Math.min(1, t));
-            const closestX = col.x1 + t * abx;
-            const closestZ = col.z1 + t * abz;
-            const dx = pos.x - closestX;
-            const dz = pos.z - closestZ;
-            const dist = Math.sqrt(dx * dx + dz * dz);
-            const targetDist = playerRadius + col.radius;
-
-            if (dist < targetDist) {
-              const overlap = targetDist - dist;
-              if (dist > 0.0001) {
-                pos.x += (dx / dist) * overlap;
-                pos.z += (dz / dist) * overlap;
-              } else {
-                const nx = -abz;
-                const nz = abx;
-                const nlen = Math.sqrt(nx * nx + nz * nz) || 1;
-                pos.x += (nx / nlen) * overlap;
-                pos.z += (nz / nlen) * overlap;
-              }
-            }
-          }
-        } else if (col.type === 'circle') {
-          const dx = pos.x - col.x;
-          const dz = pos.z - col.z;
-          const dist = Math.sqrt(dx * dx + dz * dz);
-          const targetDist = playerRadius + col.radius;
-
-          if (dist < targetDist) {
-            const overlap = targetDist - dist;
-            if (dist > 0.0001) {
-              pos.x += (dx / dist) * overlap;
-              pos.z += (dz / dist) * overlap;
-            } else {
-              pos.x += overlap;
-            }
-          }
-        } else if (col.type === 'box') {
-          const cos = Math.cos(-col.angle);
-          const sin = Math.sin(-col.angle);
-          const lx = cos * (pos.x - col.cx) - sin * (pos.z - col.cz);
-          const lz = sin * (pos.x - col.cx) + cos * (pos.z - col.cz);
-
-          const clampedX = Math.max(-col.hw, Math.min(col.hw, lx));
-          const clampedZ = Math.max(-col.hd, Math.min(col.hd, lz));
-
-          const dx = lx - clampedX;
-          const dz = lz - clampedZ;
-          const dist = Math.sqrt(dx * dx + dz * dz);
-
-          if (dist < playerRadius) {
-            let pushX = 0, pushZ = 0;
-            if (dist > 0.0001) {
-              const overlap = playerRadius - dist;
-              pushX = (dx / dist) * overlap;
-              pushZ = (dz / dist) * overlap;
-            } else {
-              const overlapX = col.hw - Math.abs(lx) + playerRadius;
-              const overlapZ = col.hd - Math.abs(lz) + playerRadius;
-              if (overlapX < overlapZ) {
-                pushX = lx >= 0 ? overlapX : -overlapX;
-              } else {
-                pushZ = lz >= 0 ? overlapZ : -overlapZ;
-              }
-            }
-            const wCos = Math.cos(col.angle);
-            const wSin = Math.sin(col.angle);
-            pos.x += wCos * pushX - wSin * pushZ;
-            pos.z += wSin * pushX + wCos * pushZ;
-          }
-        }
+    tileTypes.forEach((type, col) => {
+      for (let row = 0; row < 2; row++) {
+        const posX = originX + col * 1.0;
+        const posZ = originZ + row * 1.0;
+        if (!this.physics.validatePlacement(new THREE.Vector3(posX, 0, posZ)).valid) continue;
+        const tile = ModularTileSystem.createTile(type);
+        tile.userData.type = type === 'rocks' ? 'obstacle' : 'farmland';
+        const groundY = this.getTerrainHeight(posX, posZ);
+        tile.position.set(posX, groundY, posZ);
+        displayGroup.add(tile);
       }
+    });
+
+    this.scene.add(displayGroup);
+    this.physics.register(displayGroup);
+  }
+
+  createLivestockPastureFences() {
+    const pastureGroup = new THREE.Group();
+    pastureGroup.name = 'Livestock_Pasture_Enclosure';
+
+    // Pasture perimeter fences enclosing the animal grazing pasture
+    const fencePosts = [
+      [-20, -10], [-17, -10], [-14, -10], [-11, -10], [-8, -10],
+      [-8, -7], [-8, -4], [-8, -1],
+      [-11, -1], [-14, -1], [-17, -1], [-20, -1],
+      [-20, -4], [-20, -7]
+    ];
+
+    fencePosts.forEach(([fx, fz]) => {
+      if (!this.physics.validatePlacement(new THREE.Vector3(fx, 0, fz), new THREE.Vector3(0.2, 1.2, 0.2)).valid) return;
+      const fy = this.getTerrainHeight(fx, fz);
+      const postGeom = new THREE.CylinderGeometry(0.08, 0.09, 1.2, 5);
+      const post = new THREE.Mesh(postGeom, this.materials.woodFence);
+      post.position.set(fx, fy + 0.6, fz);
+      post.castShadow = true;
+      pastureGroup.add(post);
+    });
+
+    this.scene.add(pastureGroup);
+    this.physics.register(pastureGroup, 'obstacle');
+  }
+
+  registerCollidableObject(object, collisionMask = 'structure') {
+    if (!object) return;
+    object.userData = object.userData || {};
+    object.userData.collisionMask = collisionMask;
+    if (collisionMask === 'fence') {
+      object.userData.collisionRadius = 0.2;
+      object.userData.collisionHeight = 1.4;
+    } else if (collisionMask === 'tree') {
+      object.userData.collisionRadius = 0.6;
+      object.userData.collisionHeight = 3.0;
+    } else if (collisionMask === 'terrain') {
+      object.userData.isTerrain = true;
     }
+    this.collidableObjects.push(object);
+    this.physics.register(object);
+    if (collisionMask === 'terrain' && !this.boundaryObjects.includes(object)) {
+      this.boundaryObjects.push(object);
+    }
+  }
+
+  getBoundaryBox(targetObject) {
+    if (!targetObject) return null;
+    const box = new THREE.Box3().setFromObject(targetObject);
+    return box.isEmpty() ? null : box;
+  }
+
+  clampToBoundary(character, targetObject, padding = 0.5) {
+    const position = character?.position || character;
+    if (!position || !targetObject?.userData.isTerrain) return false;
+
+    const boundaryBox = this.getBoundaryBox(targetObject);
+    if (!boundaryBox) return false;
+
+    const isTerrain = targetObject.userData?.isTerrain === true;
+    const minX = boundaryBox.min.x;
+    const maxX = boundaryBox.max.x;
+    const minZ = boundaryBox.min.z;
+    const maxZ = boundaryBox.max.z;
+
+    if (isTerrain) {
+      let clamped = false;
+
+      if (position.x < minX + padding) {
+        position.x = minX + padding;
+        clamped = true;
+      } else if (position.x > maxX - padding) {
+        position.x = maxX - padding;
+        clamped = true;
+      }
+
+      if (position.z < minZ + padding) {
+        position.z = minZ + padding;
+        clamped = true;
+      } else if (position.z > maxZ - padding) {
+        position.z = maxZ - padding;
+        clamped = true;
+      }
+
+      return clamped;
+    }
+
+    return false;
+  }
+
+  resolveCollision(character, playerRadius = 0.45) {
+    this.clampToBoundary(character, this.terrainMesh, playerRadius);
   }
 
   checkObstacleCollision(point, radius = 0.2) {
-    for (let i = 0; i < this.colliders.length; i++) {
-      const col = this.colliders[i];
-      if (col.type === 'segment') {
-        const abx = col.x2 - col.x1;
-        const abz = col.z2 - col.z1;
-        const apx = point.x - col.x1;
-        const apz = point.z - col.z1;
-        const abLenSq = abx * abx + abz * abz;
-        if (abLenSq > 0) {
-          let t = Math.max(0, Math.min(1, (apx * abx + apz * abz) / abLenSq));
-          const closestX = col.x1 + t * abx;
-          const closestZ = col.z1 + t * abz;
-          const dx = point.x - closestX;
-          const dz = point.z - closestZ;
-          if (dx * dx + dz * dz < (radius + col.radius) ** 2) {
-            return true;
-          }
-        }
-      } else if (col.type === 'circle') {
-        const dx = point.x - col.x;
-        const dz = point.z - col.z;
-        if (dx * dx + dz * dz < (radius + col.radius) ** 2) {
-          return true;
-        }
-      } else if (col.type === 'box') {
-        const cos = Math.cos(-col.angle);
-        const sin = Math.sin(-col.angle);
-        const lx = cos * (point.x - col.cx) - sin * (point.z - col.cz);
-        const lz = sin * (point.x - col.cx) + cos * (point.z - col.cz);
-        const clampedX = Math.max(-col.hw, Math.min(col.hw, lx));
-        const clampedZ = Math.max(-col.hd, Math.min(col.hd, lz));
-        const dx = lx - clampedX;
-        const dz = lz - clampedZ;
-        if (dx * dx + dz * dz < radius * radius) {
-          return true;
-        }
-      }
-    }
-    return false;
+    const feet = new THREE.Vector3(point.x, (point.y ?? 0.5) - radius, point.z);
+    return this.physics.intersectsPlayer(feet, radius, radius * 2);
   }
 
   createDecorations() {
@@ -658,6 +651,7 @@ export class FarmEnvironment {
       const x = (Math.random() - 0.5) * 44;
       const z = (Math.random() - 0.5) * 44;
       if (Math.sqrt(x * x + z * z) < 3.5) continue; // Keep spawn clear
+      if (!this.physics.validatePlacement(new THREE.Vector3(x, 0, z), new THREE.Vector3(0.4, 0.4, 0.4)).valid) continue;
 
       const flower = new THREE.Group();
       const groundY = this.getTerrainHeight(x, z);
@@ -684,6 +678,7 @@ export class FarmEnvironment {
     for (let m = 0; m < 25; m++) {
       const x = (Math.random() - 0.5) * 40;
       const z = (Math.random() - 0.5) * 40;
+      if (!this.physics.validatePlacement(new THREE.Vector3(x, 0, z), new THREE.Vector3(0.4, 0.4, 0.4)).valid) continue;
       const shroom = new THREE.Group();
       const groundY = this.getTerrainHeight(x, z);
       shroom.position.set(x, groundY + 0.05, z);
@@ -704,15 +699,54 @@ export class FarmEnvironment {
     this.scene.add(decoGroup);
   }
 
+  addCozySceneProps() {
+    const props = [
+      {
+        scene: CozySceneModels.buildMainFarmsteadScene(),
+        position: new THREE.Vector3(-26, this.getTerrainHeight(-26, 26), 26),
+        rotationY: 0.5,
+      },
+      {
+        scene: CozySceneModels.buildGreenhouseScene(),
+        position: new THREE.Vector3(26, this.getTerrainHeight(26, 18), 18),
+        rotationY: -0.8,
+        scale: 3,
+      },
+      {
+        scene: CozySceneModels.buildBarnPastureScene(),
+        position: new THREE.Vector3(24, this.getTerrainHeight(24, -24), -24),
+        rotationY: -0.7,
+      },
+      {
+        scene: CozySceneModels.buildMarketSquareScene(),
+        position: new THREE.Vector3(-24, this.getTerrainHeight(-24, -20), -20),
+        rotationY: 0.9,
+      },
+      {
+        scene: CozySceneModels.buildRiverDockScene(),
+        position: new THREE.Vector3(0, this.getTerrainHeight(0, 30), 30),
+        rotationY: 0.2,
+      }
+    ];
+
+    props.forEach(({ scene, position, rotationY }) => {
+      scene.rotation.y = rotationY;
+      this.placeStructure(scene, position, 'farm', 5);
+    });
+  }
+
   createCampfiresAndLanterns() {
     this.campfires = [];
     this.emberParticles = [];
+    this.campfireTime = 0;
 
     // Materials
     const stoneMat = new THREE.MeshStandardMaterial({ color: 0x6c757d, roughness: 0.9, flatShading: true });
     const logMat = new THREE.MeshStandardMaterial({ color: 0x4a2c11, roughness: 0.9, flatShading: true });
-    const emberBedMat = new THREE.MeshBasicMaterial({ color: 0xff4500 });
-    const flameMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.85 });
+    const emberBedMat = new THREE.MeshBasicMaterial({ color: 0xff5a1f, transparent: true, opacity: 0.95 });
+    const flameOuterMat = new THREE.MeshBasicMaterial({ color: 0xffc14d, transparent: true, opacity: 0.82 });
+    const flameMidMat = new THREE.MeshBasicMaterial({ color: 0xff8f2d, transparent: true, opacity: 0.9 });
+    const flameCoreMat = new THREE.MeshBasicMaterial({ color: 0xfff0c2, transparent: true, opacity: 0.95 });
     const postMat = new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 0.8, flatShading: true });
     const lanternGlassMat = new THREE.MeshBasicMaterial({ color: 0xffd166 });
 
@@ -724,10 +758,15 @@ export class FarmEnvironment {
     ];
 
     campfireLocations.forEach(loc => {
+      const placement = this.physics.findPlacement(new THREE.Vector3(loc.x, 0, loc.z), new THREE.Vector3(2, 2, 2));
+      if (!placement) return;
+      loc.x = placement.x;
+      loc.z = placement.z;
       const fireGroup = new THREE.Group();
       fireGroup.name = 'Cozy_Campfire';
       const groundY = this.getTerrainHeight(loc.x, loc.z);
       fireGroup.position.set(loc.x, groundY, loc.z);
+      fireGroup.userData.fireCycle = 0.0;
 
       // Stone ring around fire
       const numStones = 8;
@@ -735,7 +774,7 @@ export class FarmEnvironment {
         const angle = (s / numStones) * Math.PI * 2;
         const stone = new THREE.Mesh(new THREE.DodecahedronGeometry(0.22 + Math.random() * 0.08), stoneMat);
         stone.position.set(Math.cos(angle) * 0.8, 0.1, Math.sin(angle) * 0.8);
-        stone.rotation.set(Math.random(), Math.random(), Math.random());
+        stone.rotation.set(angle * 0.25, angle * 0.15, angle * 0.35);
         stone.castShadow = true;
         fireGroup.add(stone);
       }
@@ -752,28 +791,65 @@ export class FarmEnvironment {
       }
 
       // Glowing Ember Bed
-      const emberBed = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.08, 10), emberBedMat);
+      const emberBed = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.68, 0.1, 10), emberBedMat);
       emberBed.position.y = 0.12;
+      emberBed.scale.set(1.0, 0.75, 1.0);
       fireGroup.add(emberBed);
 
-      // Animated 3D Flame Cone
-      const flame = new THREE.Mesh(new THREE.ConeGeometry(0.45, 1.1, 8), flameMat);
-      flame.position.y = 0.65;
-      fireGroup.add(flame);
+      // Layered flame tongues for a fuller low-poly fire silhouette
+      const flameGroup = new THREE.Group();
+      flameGroup.position.y = 0.65;
+
+      const flameCore = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.55, 6), flameCoreMat);
+      flameCore.position.y = 0.2;
+      flameCore.rotation.z = 0.02;
+      flameGroup.add(flameCore);
+
+      const flameMid = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.85, 7), flameMidMat);
+      flameMid.position.y = 0.08;
+      flameMid.rotation.z = -0.08;
+      flameGroup.add(flameMid);
+
+      const flameOuter = new THREE.Mesh(new THREE.ConeGeometry(0.42, 1.1, 8), flameOuterMat);
+      flameOuter.position.y = -0.08;
+      flameGroup.add(flameOuter);
+
+      const flameTongueL = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.42, 6), flameCoreMat);
+      flameTongueL.position.set(-0.16, 0.22, 0.02);
+      flameTongueL.rotation.z = 0.28;
+      flameGroup.add(flameTongueL);
+
+      const flameTongueR = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.38, 6), flameCoreMat);
+      flameTongueR.position.set(0.15, 0.18, -0.02);
+      flameTongueR.rotation.z = -0.22;
+      flameGroup.add(flameTongueR);
+
+      fireGroup.add(flameGroup);
+      flameGroup.userData.physics = false;
 
       // Warm Flickering Point Light
-      const fireLight = new THREE.PointLight(0xffaa33, 4.2, 20, 1.1);
-      fireLight.position.set(0, 0.8, 0);
+      const fireLight = new THREE.PointLight(0xffa54b, 4.0, 18, 1.05);
+      fireLight.position.set(0, 0.82, 0);
       fireGroup.add(fireLight);
 
       this.scene.add(fireGroup);
+      this.physics.register(fireGroup, 'obstacle');
 
       this.campfires.push({
         group: fireGroup,
-        flame: flame,
+        flameGroup: flameGroup,
+        flameCore: flameCore,
+        flameMid: flameMid,
+        flameOuter: flameOuter,
+        flameTongueL: flameTongueL,
+        flameTongueR: flameTongueR,
+        emberBed: emberBed,
         light: fireLight,
-        baseIntensity: 4.2,
-        pos: new THREE.Vector3(loc.x, groundY + 0.8, loc.z)
+        baseIntensity: 4.0,
+        pos: new THREE.Vector3(loc.x, groundY + 0.8, loc.z),
+        seed: Math.random() * Math.PI * 2,
+        emberPhase: Math.random() * 6.0,
+        loopDuration: 6.0
       });
     });
 
@@ -788,6 +864,10 @@ export class FarmEnvironment {
     ];
 
     lanternLocations.forEach(loc => {
+      const placement = this.physics.findPlacement(new THREE.Vector3(loc.x, 0, loc.z), new THREE.Vector3(1.2, 3, 1.2));
+      if (!placement) return;
+      loc.x = placement.x;
+      loc.z = placement.z;
       const postGroup = new THREE.Group();
       postGroup.name = 'Outdoor_Lantern_Post';
       const groundY = this.getTerrainHeight(loc.x, loc.z);
@@ -815,6 +895,7 @@ export class FarmEnvironment {
       postGroup.add(lanternLight);
 
       this.scene.add(postGroup);
+      this.physics.register(postGroup, 'obstacle');
     });
   }
 
@@ -897,35 +978,87 @@ export class FarmEnvironment {
 
     // Animate Campfires Flickering & Embers
     if (this.campfires) {
-      const fTime = Date.now() * 0.005;
+      this.campfireTime = (this.campfireTime || 0) + delta;
+
       this.campfires.forEach((fire, idx) => {
-        // Light intensity flickering
-        const flicker = Math.sin(fTime * 10.0 + idx) * 0.6 + (Math.random() - 0.5) * 0.4;
-        fire.light.intensity = fire.baseIntensity + flicker;
+        const localTime = (this.campfireTime + fire.seed) % fire.loopDuration;
+        const t = localTime / fire.loopDuration;
+        const phase = t * Math.PI * 2;
 
-        // Flame mesh scaling animation
-        const sX = 1.0 + Math.sin(fTime * 14.0 + idx) * 0.12;
-        const sY = 1.0 + Math.cos(fTime * 11.0 + idx) * 0.18;
-        fire.flame.scale.set(sX, sY, sX);
+        const flickerA = Math.sin(phase * 3.0 + idx * 0.7);
+        const flickerB = Math.sin(phase * 5.0 + fire.seed * 0.5);
+        const flickerC = Math.cos(phase * 7.0 + idx * 1.3);
+        const flamePulse = 0.55 + 0.45 * Math.sin(phase);
 
-        // Spawn rising ember particles
-        if (Math.random() < delta * 6.0) {
-          const pGeom = new THREE.DodecahedronGeometry(0.04 + Math.random() * 0.04);
-          const pMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
-          const pMesh = new THREE.Mesh(pGeom, pMat);
-          pMesh.position.copy(fire.pos).add(new THREE.Vector3(
-            (Math.random() - 0.5) * 0.5,
-            0.2,
-            (Math.random() - 0.5) * 0.5
-          ));
+        const intensity = fire.baseIntensity + flickerA * 0.38 + flickerB * 0.22 + flickerC * 0.12;
+        fire.light.intensity = Math.max(0.1, intensity + flamePulse * 0.35);
 
-          this.scene.add(pMesh);
-          this.emberParticles = this.emberParticles || [];
-          this.emberParticles.push({
-            mesh: pMesh,
-            vel: new THREE.Vector3((Math.random() - 0.5) * 0.4, 1.2 + Math.random() * 0.8, (Math.random() - 0.5) * 0.4),
-            life: 1.2
-          });
+        fire.light.distance = 16.5 + flamePulse * 2.2;
+        fire.light.decay = 1.0 + flamePulse * 0.15;
+
+        if (fire.emberBed) {
+          fire.emberBed.scale.set(1.0 + Math.sin(phase * 2.0) * 0.03, 0.75 + Math.sin(phase * 3.0) * 0.03, 1.0 + Math.cos(phase * 2.0) * 0.03);
+        }
+
+        if (fire.flameGroup) {
+          fire.flameGroup.scale.set(
+            1.0 + Math.sin(phase * 2.0) * 0.1,
+            1.0 + Math.sin(phase * 3.0 + 0.8) * 0.18,
+            1.0 + Math.cos(phase * 2.0 + 0.4) * 0.08
+          );
+          fire.flameGroup.rotation.y = Math.sin(phase * 0.5) * 0.08;
+          fire.flameGroup.rotation.z = Math.sin(phase * 1.5 + 0.3) * 0.03;
+        }
+
+        if (fire.flameCore) {
+          fire.flameCore.scale.set(1.0 + Math.sin(phase * 4.0) * 0.08, 1.0 + Math.sin(phase * 3.0 + 1.2) * 0.2, 1.0 + Math.cos(phase * 4.0) * 0.08);
+          fire.flameCore.position.y = 0.18 + Math.sin(phase * 2.0) * 0.04;
+        }
+
+        if (fire.flameMid) {
+          fire.flameMid.scale.set(1.0 + Math.sin(phase * 3.0 + 0.5) * 0.1, 1.0 + Math.sin(phase * 2.0 + 0.9) * 0.15, 1.0 + Math.cos(phase * 3.0) * 0.08);
+          fire.flameMid.rotation.z = -0.08 + Math.sin(phase * 1.6) * 0.05;
+        }
+
+        if (fire.flameOuter) {
+          fire.flameOuter.scale.set(1.0 + Math.sin(phase * 2.0 + 0.2) * 0.12, 1.0 + Math.sin(phase * 1.0 + 1.4) * 0.16, 1.0 + Math.sin(phase * 2.2 + 0.7) * 0.1);
+          fire.flameOuter.position.y = -0.08 + Math.sin(phase * 1.5 + 0.2) * 0.05;
+        }
+
+        if (fire.flameTongueL) {
+          fire.flameTongueL.scale.set(1.0 + Math.sin(phase * 3.0 + 1.1) * 0.12, 1.0 + Math.sin(phase * 4.0 + 0.3) * 0.18, 1.0);
+          fire.flameTongueL.position.y = 0.18 + Math.sin(phase * 2.4 + 0.4) * 0.05;
+        }
+
+        if (fire.flameTongueR) {
+          fire.flameTongueR.scale.set(1.0 + Math.cos(phase * 3.0 + 0.2) * 0.1, 1.0 + Math.cos(phase * 4.0 + 1.0) * 0.16, 1.0);
+          fire.flameTongueR.position.y = 0.16 + Math.cos(phase * 2.2 + 0.7) * 0.05;
+        }
+
+        const spawnGate = Math.abs(Math.sin(phase * 6.0 + fire.seed)) > 0.92;
+        if (spawnGate && this.emberParticles.length < 90) {
+          const emberCount = 2;
+          for (let i = 0; i < emberCount; i++) {
+            const emberGeom = new THREE.DodecahedronGeometry(0.02 + ((idx + i) % 3) * 0.01);
+            const emberMat = new THREE.MeshBasicMaterial({ color: i === 0 ? 0xffc14d : 0xff7a18, transparent: true, opacity: 0.92 });
+            const emberMesh = new THREE.Mesh(emberGeom, emberMat);
+            const offsetAngle = phase + i * 2.1 + fire.seed;
+            emberMesh.position.set(
+              fire.pos.x + Math.cos(offsetAngle) * 0.18,
+              fire.pos.y + 0.35 + Math.sin(phase * 2.0 + i) * 0.03,
+              fire.pos.z + Math.sin(offsetAngle) * 0.18
+            );
+            this.scene.add(emberMesh);
+
+            this.emberParticles.push({
+              mesh: emberMesh,
+              age: 0,
+              life: 1.6 + i * 0.15,
+              startPos: emberMesh.position.clone(),
+              seed: fire.seed + idx * 0.6 + i * 1.7,
+              swirl: 0.7 + i * 0.15
+            });
+          }
         }
       });
     }
@@ -934,9 +1067,23 @@ export class FarmEnvironment {
     if (this.emberParticles) {
       for (let i = this.emberParticles.length - 1; i >= 0; i--) {
         const p = this.emberParticles[i];
+        p.age += delta;
         p.life -= delta;
-        p.mesh.position.addScaledVector(p.vel, delta);
-        p.mesh.scale.multiplyScalar(0.96);
+
+        const rise = p.age * (0.9 + p.swirl * 0.35);
+        const driftX = Math.sin(p.age * 2.4 + p.seed) * 0.18 + Math.cos(p.age * 0.7 + p.seed) * 0.06;
+        const driftZ = Math.cos(p.age * 2.1 + p.seed) * 0.18 + Math.sin(p.age * 0.8 + p.seed) * 0.06;
+        const lift = p.age * (0.75 + p.swirl * 0.2);
+
+        p.mesh.position.set(
+          p.startPos.x + driftX,
+          p.startPos.y + lift + rise * 0.15,
+          p.startPos.z + driftZ
+        );
+
+        const fade = Math.max(0, p.life / 1.6);
+        p.mesh.material.opacity = Math.min(0.95, fade);
+        p.mesh.scale.setScalar(0.8 + (1.0 - fade) * 0.35);
 
         if (p.life <= 0) {
           this.scene.remove(p.mesh);

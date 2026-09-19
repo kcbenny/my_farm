@@ -6,6 +6,7 @@ import { CropSystem } from './gameplay/CropSystem.js';
 import { PeashooterWeapon } from './gameplay/PeashooterWeapon.js';
 import { PestSystem } from './gameplay/PestSystem.js';
 import { PlayerController } from './gameplay/PlayerController.js';
+import { PlayerPhysicsSystem } from './gameplay/PlayerPhysicsSystem.js';
 import { SoundSystem } from './gameplay/SoundSystem.js';
 import { UIManager } from './ui/UIManager.js';
 import { ShopSystem } from './gameplay/ShopSystem.js';
@@ -13,6 +14,9 @@ import { KittyHomeSystem } from './gameplay/KittyHomeSystem.js';
 import { PlayableItemsSystem } from './gameplay/PlayableItemsSystem.js';
 import { MapSystem } from './ui/MapSystem.js';
 import { CharacterSelectManager } from './ui/CharacterSelectManager.js';
+import { LivestockSystem } from './world/LivestockSystem.js';
+import { GLTFExportManager } from './gameplay/GLTFExportManager.js';
+import { normalizeAsset } from './gameplay/WorldPhysics.js';
 
 class FarmGame {
   constructor() {
@@ -27,6 +31,9 @@ class FarmGame {
     this.initEngine();
     this.initComponents();
     this.setupWindowResize();
+
+    window.GLTFExportManager = GLTFExportManager;
+    window.farmGame = this;
 
     // Start loop
     this.animate = this.animate.bind(this);
@@ -81,11 +88,11 @@ class FarmGame {
     this.farm = new FarmEnvironment(this.scene);
     this.ui.setLoadingProgress(60);
 
-    const getTerrainHeight = (x, z) => this.farm.getTerrainHeight(x, z);
+    const getTerrainHeight = (x, z) => this.farm.physics.surfaceAt(x, z)?.height ?? this.farm.getTerrainHeight(x, z);
     const resolveCollision = (pos, radius) => this.farm.resolveCollision(pos, radius);
 
-    // Determine active character (default to Sunny from Image 1)
-    let initialCharId = 'sunny';
+    // Determine active character (default to Cozy low-poly kitty)
+    let initialCharId = 'cozy';
     try {
       const saved = localStorage.getItem('my_farm_kitty');
       if (saved && CAT_CHARACTERS[saved]) {
@@ -97,19 +104,33 @@ class FarmGame {
 
     // 3D Cartoon Cat Character
     this.cat = new CatCharacter(this.scene, initialCharId);
+    normalizeAsset(this.cat.mesh, 'player');
     this.ui.setLoadingProgress(70);
 
     // Weapon & Projectiles
     this.weapon = new PeashooterWeapon(this.scene);
 
     // Crops System
-    this.cropSystem = new CropSystem(this.scene, this.farm.gardenPlots);
+    this.cropSystem = new CropSystem(this.scene, this.farm.gardenPlots, this.farm.physics);
+
+    // Livestock System (Cow, Chicken, Sheep, Pig)
+    this.livestock = new LivestockSystem(this.scene, getTerrainHeight);
 
     // Playable Items (Yarn Fur Balls, Catnip, Treats)
-    this.playableItems = new PlayableItemsSystem(this.scene, this.sound, getTerrainHeight);
+    this.playableItems = new PlayableItemsSystem(this.scene, this.sound, getTerrainHeight, this.farm.physics);
 
     // Kitty Home Construction Site
-    this.kittyHome = new KittyHomeSystem(this.scene, this.sound, getTerrainHeight);
+    this.kittyHome = new KittyHomeSystem(this.scene, this.sound, getTerrainHeight, this.farm.physics);
+    this.placementPointer = new THREE.Vector2();
+    this.renderer.domElement.addEventListener('pointermove', event => {
+      const bounds = this.renderer.domElement.getBoundingClientRect();
+      this.placementPointer.set((event.clientX - bounds.left) / bounds.width * 2 - 1, -(event.clientY - bounds.top) / bounds.height * 2 + 1);
+    });
+    window.addEventListener('keydown', event => {
+      if (event.repeat || event.target.closest('input, textarea, [contenteditable="true"]')) return;
+      if (event.code === 'KeyB') this.kittyHome.setPlacementMode(!this.kittyHome.placementActive);
+      if (event.code === 'Escape') this.kittyHome.setPlacementMode(false);
+    });
 
     // Pests (respects terrain elevation & flying sky birds)
     this.pestSystem = new PestSystem(this.scene, getTerrainHeight);
@@ -125,8 +146,18 @@ class FarmGame {
       this.renderer.domElement,
       this.sound,
       getTerrainHeight,
-      resolveCollision
+      resolveCollision,
+      this.farm.terrainMesh
     );
+
+    this.playerPhysics = new PlayerPhysicsSystem({
+      controller: this.controller,
+      terrainMesh: this.farm.terrainMesh,
+      collidableObjects: this.farm.collidableObjects,
+      getTerrainHeight,
+      resolveCollision,
+      worldPhysics: this.farm.physics,
+    });
 
     // Map System (Minimap HUD & Full World Map with Path Navigation)
     this.mapSystem = new MapSystem(this);
@@ -236,6 +267,7 @@ class FarmGame {
 
     this.currentCharacterId = characterId;
     this.cat = new CatCharacter(this.scene, characterId);
+    normalizeAsset(this.cat.mesh, 'player');
     this.cat.mood = prevMood;
 
     if (this.controller) {
@@ -298,6 +330,10 @@ class FarmGame {
   }
 
   triggerAction() {
+    if (this.kittyHome.placementActive) {
+      this.confirmHomePlacement();
+      return;
+    }
     this.cat.triggerAction((muzzlePos, muzzleDir) => {
       // Cast optical ray from center of screen (crosshair focus point)
       this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
@@ -333,6 +369,10 @@ class FarmGame {
   }
 
   triggerGather() {
+    if (this.kittyHome.placementActive) {
+      this.confirmHomePlacement();
+      return;
+    }
     if (this.cat.currentActionName === 'Action' || this.cat.currentActionName === 'Gather') return;
 
     // 1. Check Harvestable Ripe Crop
@@ -381,8 +421,8 @@ class FarmGame {
       const activeSeed = this.shop.activeSeed;
       if (this.shop.seeds[activeSeed] > 0) {
         this.cat.triggerGather(() => {
+          if (!this.cropSystem.plantSeed(nearestEmptyPlot, activeSeed)) return;
           this.shop.seeds[activeSeed]--;
-          this.cropSystem.plantSeed(nearestEmptyPlot, activeSeed);
           this.sound.playPop();
           this.ui.updateSeedHotbar();
           this.ui.showToast(`🌱 Planted 1x ${activeSeed.toUpperCase()} seed!`);
@@ -418,12 +458,20 @@ class FarmGame {
     this.ui.showToast('🌱 Stand closer to a ripe crop, empty plot, 3D Shop stall, or Kitty Home site!');
   }
 
+  confirmHomePlacement() {
+    this.controller.isMouseDownLeft = false;
+    this.kittyHome.updatePlacement(this.camera, document.pointerLockElement ? new THREE.Vector2() : this.placementPointer);
+    if (!this.kittyHome.confirmPlacement()) this.ui.showToast(this.kittyHome.placementReason || 'Invalid building site');
+  }
+
   setupWindowResize() {
     window.addEventListener('resize', () => {
+      window.scrollTo(0, 0);
       this.camera.aspect = window.innerWidth / window.innerHeight;
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(window.innerWidth, window.innerHeight);
     });
+    window.scrollTo(0, 0);
   }
 
   animate() {
@@ -454,11 +502,17 @@ class FarmGame {
       this.mapSystem.update(delta, this.controller.position, facingAngle);
     }
 
-    // Update Controller
-    this.controller.update(delta);
-
     // Update Farm Ambient Animations
     this.farm.update(delta);
+
+    this.farm.physics.update();
+    this.playerPhysics.updatePlayerPhysics(delta);
+    this.kittyHome.updatePlacement(this.camera, document.pointerLockElement ? new THREE.Vector2() : this.placementPointer);
+
+    // Update Livestock Animations & AI
+    if (this.livestock) {
+      this.livestock.update(delta);
+    }
 
     // Update Crops
     this.cropSystem.update(delta);

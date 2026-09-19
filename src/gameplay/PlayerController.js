@@ -1,13 +1,18 @@
 import * as THREE from 'three';
 
 export class PlayerController {
-  constructor(catCharacter, camera, domElement, soundSystem, getTerrainHeight, resolveCollision) {
+  constructor(catCharacter, camera, domElement, soundSystem, getTerrainHeight, resolveCollision, terrainMesh = null) {
     this.cat = catCharacter;
     this.camera = camera;
     this.domElement = domElement;
     this.sound = soundSystem;
     this.getTerrainHeight = getTerrainHeight || ((x, z) => 0);
     this.resolveCollision = resolveCollision || null;
+    this.terrainMesh = terrainMesh;
+    this.groundRaycaster = new THREE.Raycaster();
+    this.groundRayOrigin = new THREE.Vector3();
+    this.groundRayDirection = new THREE.Vector3(0, -1, 0);
+    this.maxTerrainStep = 0.55;
 
     // Movement state
     const initialGroundY = this.getTerrainHeight(0, 0);
@@ -109,6 +114,19 @@ export class PlayerController {
       this.cat.mesh.rotation.y = this.rotationAngle;
       this.updateFPSVisibility();
     }
+  }
+
+  getGroundHeightAt(x, z) {
+    let groundY = this.getTerrainHeight(x, z);
+    if (this.terrainMesh) {
+      this.groundRayOrigin.set(x, this.position.y + 30, z);
+      this.groundRaycaster.set(this.groundRayOrigin, this.groundRayDirection);
+      const hits = this.groundRaycaster.intersectObject(this.terrainMesh, false);
+      if (hits.length > 0) {
+        groundY = hits[0].point.y;
+      }
+    }
+    return groundY;
   }
 
   setupKeyboardListeners() {
@@ -412,18 +430,30 @@ export class PlayerController {
 
       moveDir.normalize();
 
+      const previousPosition = this.position.clone();
+
       const worldMoveDir = new THREE.Vector3()
         .addScaledVector(camRight, moveDir.x)
         .addScaledVector(camForwardHoriz, moveDir.y)
         .normalize();
 
       const currentSpeed = (this.keys.sprint ? this.speed * this.sprintMultiplier : this.speed);
-      this.position.x += worldMoveDir.x * currentSpeed * delta;
-      this.position.z += worldMoveDir.z * currentSpeed * delta;
+      const nextPosition = this.position.clone();
+      nextPosition.x += worldMoveDir.x * currentSpeed * delta;
+      nextPosition.z += worldMoveDir.z * currentSpeed * delta;
 
-      // Solid obstacle & barricade collision resolution
-      if (this.resolveCollision) {
-        this.resolveCollision(this.position, 0.45);
+      const currentGroundY = this.getGroundHeightAt(this.position.x, this.position.z);
+      const nextGroundY = this.getGroundHeightAt(nextPosition.x, nextPosition.z);
+      const isTooSteep = this.isGrounded && (nextGroundY - currentGroundY) > this.maxTerrainStep;
+
+      if (!isTooSteep) {
+        this.position.x = nextPosition.x;
+        this.position.z = nextPosition.z;
+
+        // Solid obstacle & barricade collision resolution
+        if (this.resolveCollision) {
+          this.resolveCollision({ position: this.position, previousPosition }, 0.45);
+        }
       }
 
       // Clamp within farm boundaries
@@ -488,7 +518,7 @@ export class PlayerController {
     }
 
     // Ground Contour & Jump Physics across tiered slopes
-    const groundY = this.getTerrainHeight(this.position.x, this.position.z);
+    const groundY = this.getGroundHeightAt(this.position.x, this.position.z);
 
     if (!this.isGrounded) {
       this.verticalVelocity -= this.gravity * delta;

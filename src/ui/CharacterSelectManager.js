@@ -14,7 +14,7 @@ import { CatAnimations } from '../character/CatAnimations.js';
 export class CharacterSelectManager {
   constructor(game) {
     this.game = game;
-    this.selectedId = 'sunny'; // Default to Image 1's joyful kitten!
+    this.selectedId = 'cozy'; // Default to the low-poly cozy kitten.
     this.previewCat = null;
     this.previewMixer = null;
     this.previewActions = {};
@@ -105,22 +105,22 @@ export class CharacterSelectManager {
     this.turntableRenderer.toneMappingExposure = 1.25;
 
     // Turntable Lighting
-    const ambientLight = new THREE.AmbientLight(0xfff5ea, 1.4);
+    const ambientLight = new THREE.AmbientLight(0xfff1e4, 1.55);
     this.turntableScene.add(ambientLight);
 
-    const keyLight = new THREE.DirectionalLight(0xffffff, 2.0);
-    keyLight.position.set(2, 4, 3);
+    const keyLight = new THREE.DirectionalLight(0xfff8f0, 1.8);
+    keyLight.position.set(1.8, 3.6, 3.2);
     keyLight.castShadow = true;
     keyLight.shadow.mapSize.width = 1024;
     keyLight.shadow.mapSize.height = 1024;
     this.turntableScene.add(keyLight);
 
-    const fillLight = new THREE.DirectionalLight(0xa0c4ff, 1.0);
-    fillLight.position.set(-3, 2, -1);
+    const fillLight = new THREE.DirectionalLight(0xffd8c2, 0.75);
+    fillLight.position.set(-2.5, 1.8, -1.5);
     this.turntableScene.add(fillLight);
 
-    const rimLight = new THREE.DirectionalLight(0xffe5d9, 1.2);
-    rimLight.position.set(0, 3, -3);
+    const rimLight = new THREE.DirectionalLight(0xffffff, 0.95);
+    rimLight.position.set(0, 2.8, -2.6);
     this.turntableScene.add(rimLight);
 
     // Cute Pedestal Stage
@@ -136,6 +136,12 @@ export class CharacterSelectManager {
     this.pedestalMesh.position.set(0, -0.07, 0);
     this.pedestalMesh.receiveShadow = true;
     this.turntableScene.add(this.pedestalMesh);
+
+    const backdropGeom = new THREE.SphereGeometry(7, 24, 16);
+    const backdropMat = new THREE.MeshBasicMaterial({ color: 0xfdf3eb, transparent: true, opacity: 0.22 });
+    this.backdropMesh = new THREE.Mesh(backdropGeom, backdropMat);
+    this.backdropMesh.position.set(0, 1.4, -6);
+    this.turntableScene.add(this.backdropMesh);
 
     // Pedestal Rim Ring
     const ringGeom = new THREE.TorusGeometry(0.88, 0.03, 16, 32);

@@ -1,6 +1,6 @@
 /**
  * Kitty Characters Configuration
- * Includes 3 new characters based on the user-provided images plus the classic hero.
+ * Includes the original cozy roster plus extra low-poly farm friends inspired by warm indoor scenes.
  */
 
 export const CAT_CHARACTERS = {
@@ -121,6 +121,186 @@ export const CAT_CHARACTERS = {
       moodDecayMult: 1.0,
       harvestMult: 1.0,
       weaponSpeedMult: 1.2
+    }
+  },
+
+  ember: {
+    id: 'ember',
+    name: 'Ember',
+    title: 'The Hearthside Snuggler',
+    subtitle: 'Fireplace Cozy Cat',
+    breed: 'Blue-Frost Tabby',
+    imageBadge: '🔥 Hearthside Cozy',
+    badge: 'Warm Hearth',
+    badgeClass: 'badge-ember',
+    themeColor: '#f97316',
+    accentColor: '#7c2d12',
+    emoji: '🔥🐾',
+    tagline: 'Candlelit Blanket Dreamer',
+    description: 'A soft blue-grey kitty with a warm orange scarf, curled beside a glowing fire and a basket of blankets. Ember brings the cozy cabin energy to every sunrise.',
+    quote: '"The fire is warm, the blankets are fluffy, and the farm feels like home."',
+    trait: '🔥 Hearth Glow (Slower Mood Decay & Cozy Bonus)',
+    stats: {
+      speed: 79,
+      cuteness: 97,
+      farming: 84,
+      energy: 72
+    },
+    bonuses: {
+      speedMult: 0.96,
+      moodDecayMult: 0.65,
+      harvestMult: 1.05,
+      weaponSpeedMult: 1.0
+    }
+  },
+
+  moss: {
+    id: 'moss',
+    name: 'Moss',
+    title: 'The Campfire Explorer',
+    subtitle: 'Tent-Loving Traveler',
+    breed: 'Forest Tabby',
+    imageBadge: '⛺ Campfire Scout',
+    badge: 'Camp Trail',
+    badgeClass: 'badge-moss',
+    themeColor: '#84cc16',
+    accentColor: '#365314',
+    emoji: '⛺🐾',
+    tagline: 'Lanterns & Soft Pine Dreams',
+    description: 'A mossy tan cat with a comfy scarf and a gentle campfire stare. Moss feels right at home in a tent under the stars, counting fireflies and calm evening breezes.',
+    quote: '"The best stories start in a warm tent with a crackling fire."',
+    trait: '⛺ Forest Calm (+10% Harvest Cheer & Peaceful Aura)',
+    stats: {
+      speed: 82,
+      cuteness: 94,
+      farming: 90,
+      energy: 80
+    },
+    bonuses: {
+      speedMult: 1.0,
+      moodDecayMult: 0.8,
+      harvestMult: 1.1,
+      weaponSpeedMult: 1.02
+    }
+  },
+
+  puff: {
+    id: 'puff',
+    name: 'Puff',
+    title: 'The Snowy Window Napper',
+    subtitle: 'Cloudy Cozy Dreamer',
+    breed: 'Cloud Persian',
+    imageBadge: '❄️ Winter Window',
+    badge: 'Frosty Cuddle',
+    badgeClass: 'badge-puff',
+    themeColor: '#93c5fd',
+    accentColor: '#1d4ed8',
+    emoji: '❄️🐾',
+    tagline: 'Soft Blankets & Blue Skies',
+    description: 'A fluffy ivory kitten resting by the window while snowflakes drift around the glass. Puff is calm, dreamy, and endlessly patient with morning sunbeams.',
+    quote: '"The window is warm with sun, and my blanket is extra fluffy today."',
+    trait: '❄️ Snowy Calm (Gentler Mood Drain & Extra Cuteness)',
+    stats: {
+      speed: 74,
+      cuteness: 99,
+      farming: 88,
+      energy: 70
+    },
+    bonuses: {
+      speedMult: 0.9,
+      moodDecayMult: 0.7,
+      harvestMult: 1.08,
+      weaponSpeedMult: 1.0
+    }
+  },
+
+  maple: {
+    id: 'maple',
+    name: 'Maple',
+    title: 'The Storybook Lounger',
+    subtitle: 'Cider Glow Companion',
+    breed: 'Amber Calico',
+    imageBadge: '📚 Cozy Reading',
+    badge: 'Storytime Star',
+    badgeClass: 'badge-maple',
+    themeColor: '#f59e0b',
+    accentColor: '#9a5b00',
+    emoji: '📚🐾',
+    tagline: 'Purring Through the Pages',
+    description: 'A warm amber-and-cream cat curled with a book by the window, glowing in the soft evening light. Maple wants every farm moment to feel like a comforting story.',
+    quote: '"Every chapter feels sweeter when the room smells like cinnamon and warm wool."',
+    trait: '📖 Storybook Calm (+15% Harvest Bonus While Relaxed)',
+    stats: {
+      speed: 81,
+      cuteness: 96,
+      farming: 94,
+      energy: 78
+    },
+    bonuses: {
+      speedMult: 0.98,
+      moodDecayMult: 0.75,
+      harvestMult: 1.15,
+      weaponSpeedMult: 1.04
+    }
+  },
+
+  cedar: {
+    id: 'cedar',
+    name: 'Cedar',
+    title: 'The Cabin Window Watcher',
+    subtitle: 'Woodland Cozy Guardian',
+    breed: 'Cedar Stripe',
+    imageBadge: '🌲 Cabin Glow',
+    badge: 'Window Guard',
+    badgeClass: 'badge-cedar',
+    themeColor: '#38bdf8',
+    accentColor: '#0f766e',
+    emoji: '🌲🐾',
+    tagline: 'Soft Fur, Big Garden Dreams',
+    description: 'A beige-and-slate kitty with a cool mint scarf and bright watchful eyes, perched by a sunlit cabin window. Cedar loves tucked-in corners, gentle morning chatter, and happy little harvests.',
+    quote: '"The garden is glowing, the cabin is quiet, and everything is just right."',
+    trait: '🌲 Cabin Calm (Low Mood Drain + Steady Farm Energy)',
+    stats: {
+      speed: 84,
+      cuteness: 95,
+      farming: 92,
+      energy: 88
+    },
+    bonuses: {
+      speedMult: 1.03,
+      moodDecayMult: 0.78,
+      harvestMult: 1.12,
+      weaponSpeedMult: 1.05
+    }
+  },
+
+  cozy: {
+    id: 'cozy',
+    name: 'Cozy',
+    title: 'The Hearthside Cuddler',
+    subtitle: 'Low-Poly Sunbeam Kitty',
+    breed: 'Cozy Tabby',
+    imageBadge: '☕ Warm Low-Poly Kitty',
+    badge: 'Cozy Plush',
+    badgeClass: 'badge-cozy',
+    themeColor: '#f59e0b',
+    accentColor: '#9a3412',
+    emoji: '☕🐱',
+    tagline: 'Soft Paws & Warm Light',
+    description: 'A cozy low-poly ginger-and-cream kitty with closed smiling eyes, a plush chest, and a gentle seated pose. Cozy feels like a warm blanket, a quiet room, and a sunbeam on the floor.',
+    quote: '"I found the softest patch of sunlight and I am staying here all afternoon."',
+    trait: '☀️ Sunbeam Rest (+20% Cozy Mood Recovery)',
+    stats: {
+      speed: 80,
+      cuteness: 99,
+      farming: 84,
+      energy: 86
+    },
+    bonuses: {
+      speedMult: 0.98,
+      moodDecayMult: 0.7,
+      harvestMult: 1.08,
+      weaponSpeedMult: 1.0
     }
   }
 };

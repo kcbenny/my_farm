@@ -1,0 +1,61 @@
+Analyze my Three.js scene loading and physics logic, and refactor the code to implement object classification, selective physics collision, scale normalization, and strict ground clamping.
+
+### Requirements:
+
+1. Object Detection & Classification:
+   - Traverse imported GLTF/OBJ scene meshes and categorize them by naming conventions or userData ('road', 'terrain', 'house', 'farm', 'tree', 'crop').
+
+2. Ground Clamping & Anti-Clipping (Crucial):
+   - Prevent the character from walking under the terrain, road, or ground meshes under any circumstances.
+   - Implement continuous downward Raycasting from the character's position to detect the exact surface elevation (`intersection.point.y`).
+   - Dynamically clamp the character's position to `groundHeight + playerPivotOffset` whenever moving.
+   - Ensure the ground surface itself has a static collider or heightmap to prevent gravitational pull from pulling the player below the surface mesh.
+
+3. Selective Collision Rules:
+   - Walkable Surfaces (Roads, Terrain, Grass): Apply walkable physics/raycast targets only; do NOT create blocking obstacle hitboxes over them.
+   - Obstacles (Houses, Farm Structures, Trees): Apply tight rigid colliders (ConvexHull or tight OBB) so the player cannot clip into or walk through them.
+   - Interactive Items (Crops, Collectibles): Set as non-blocking trigger volumes for interaction (e.g., 'E' key), allowing the character to walk near them without sticking.
+
+4. Scale & Asset Ratio Normalization:
+   - Define reference unit scales relative to the player height (e.g., Player = 1.8 units, House Door ~ 2.2 units, Trees ~ 3–5 units).
+   - Use `THREE.Box3().setFromObject(mesh)` to compute bounding dimensions for each loaded asset.
+   - Uniformly scale assets dynamically to match intended real-world proportions before placing them in the scene.
+
+5. Camera Collision & Occlusion Prevention:
+   - Implement a Raycaster from the character's target position to the ideal camera position.
+   - If an environmental obstacle (e.g., house, wall, hill) intersects the ray, automatically zoom the camera forward (shorten the spring-arm distance) to place the camera in FRONT of the obstacle.
+   - Smoothly extend the camera back out to its default distance when the obstacle is no longer blocking the line of sight.
+
+6. Object Transparency / Dithered Fade (Alternative Occlusion):
+   - Alternatively, detect any scene mesh positioned between the camera and the character.
+   - Temporarily fade out or apply a semi-transparent shader/dither material to blocking objects so the character remains 100% visible at all times.
+
+7. Camera Near-Clipping Plane Adjustment:
+   - Configure `camera.near` to a small value (e.g., `0.1`) to prevent close geometry from clipping into transparent planes across the screen.
+
+8. Orbit & Character Rotation Constraints:
+   - Ensure camera rotation around the player maintains a clear line-of-sight without getting trapped inside inverted geometry or large bounding structures.
+
+9. Road Detection & No-Build Zones:
+   - Identify all road/pathway meshes by checking `mesh.userData.type === 'road'` or name patterns (e.g., `road`, `path`, `dirt_path`).
+   - Define a "No-Build Zone" boundary around road geometries using Axis-Aligned Bounding Boxes (`THREE.Box3`) or navigation mesh zones.
+
+10. Placement Validation Logic (Raycasting / Grid Check):
+   - Before instantiating or placing any asset (e.g., farm plots, crops, campfires, fences):
+     * Cast a downward Raycaster from the proposed placement coordinates `(x, y, z)`.
+     * If the ray intersects a mesh classified as `road` or `path`, mark the placement as **INVALID**.
+     * Restrict building placement exclusively to valid `grass` or `farmland` surface meshes.
+
+11. Visual Placement Indicator (Placement Mode):
+   - Provide visual feedback during placement: show a green preview box/mesh over valid soil and a red preview box over roads or restricted areas.
+   - Disable the place/build action (`E` key or Mouse Click) whenever the preview cursor overlaps a road surface.
+
+12. Procedural Spawner Restriction:
+   - If assets spawn procedurally on scene initialization, filter random `(x, z)` position arrays against road bounding boxes to ensure clean path clearings.
+
+
+Code Output:
+   - Provide clean JavaScript/TypeScript implementation for Three.js (e.g., using `THREE.Raycaster` or a camera collision controller).
+   - Show how to update this dynamically inside the main `requestAnimationFrame` render loop.
+   - Provide complete, clean JavaScript/TypeScript code for Three.js (integrated with Cannon.js, Rapier, or standard Raycaster logic).
+   - Add debug logs and optional helper visuals (e.g., raycast vectors or bounding boxes) to verify ground snapping and collisions.

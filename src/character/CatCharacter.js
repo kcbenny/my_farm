@@ -3,7 +3,7 @@ import { CatModelBuilder } from './CatModelBuilder.js';
 import { CatAnimations } from './CatAnimations.js';
 
 export class CatCharacter {
-  constructor(scene, characterType = 'sunny') {
+  constructor(scene, characterType = 'cozy') {
     this.scene = scene;
     this.characterType = characterType;
     const builder = new CatModelBuilder(characterType);

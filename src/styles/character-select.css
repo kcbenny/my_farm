@@ -271,6 +271,12 @@
 .badge-mochi { background: #f5ebe0; color: #5c4033; border: 1px solid #d5bdaf; }
 .badge-snowball { background: #d1fae5; color: #047857; border: 1px solid #6ee7b7; }
 .badge-rusty { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+.badge-ember { background: #fff1db; color: #9a4b12; border: 1px solid #fdba74; }
+.badge-moss { background: #ecfccb; color: #3f6212; border: 1px solid #a3e635; }
+.badge-puff { background: #dbeafe; color: #1d4ed8; border: 1px solid #93c5fd; }
+.badge-maple { background: #fef3c7; color: #92400e; border: 1px solid #fbbf24; }
+.badge-cedar { background: #e0f2fe; color: #0f766e; border: 1px solid #7dd3fc; }
+.badge-cozy { background: #fff7ed; color: #9a3412; border: 1px solid #fdba74; }
 
 .char-breed-title {
   font-size: 0.88rem;

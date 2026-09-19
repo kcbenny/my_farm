@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 
 export class PlayableItemsSystem {
-  constructor(scene, soundSystem, getTerrainHeight) {
+  constructor(scene, soundSystem, getTerrainHeight, worldPhysics = null) {
     this.scene = scene;
     this.sound = soundSystem;
+    this.worldPhysics = worldPhysics;
     this.getTerrainHeight = getTerrainHeight || ((x, z) => 0);
     this.items = [];
     this.materials = this.createMaterials();
@@ -22,6 +23,12 @@ export class PlayableItemsSystem {
       postWood: new THREE.MeshStandardMaterial({ color: 0x8b5e3c, roughness: 0.8, flatShading: true }),
       sparkleMat: new THREE.MeshBasicMaterial({ color: 0xfff3b0 })
     };
+  }
+
+  registerItem(itemData) {
+    itemData.group.userData.type = 'collectible';
+    this.worldPhysics?.register(itemData.group);
+    this.items.push(itemData);
   }
 
   spawnFurBall(pos, colorType = 'pink') {
@@ -66,7 +73,7 @@ export class PlayableItemsSystem {
       cooldown: 0
     };
 
-    this.items.push(itemData);
+    this.registerItem(itemData);
     if (this.sound) this.sound.playPop();
     return itemData;
   }
@@ -106,7 +113,7 @@ export class PlayableItemsSystem {
       cooldown: 0
     };
 
-    this.items.push(itemData);
+    this.registerItem(itemData);
     if (this.sound) this.sound.playPop();
     return itemData;
   }
@@ -145,7 +152,7 @@ export class PlayableItemsSystem {
       cooldown: 0
     };
 
-    this.items.push(itemData);
+    this.registerItem(itemData);
     if (this.sound) this.sound.playPop();
     return itemData;
   }
@@ -182,7 +189,7 @@ export class PlayableItemsSystem {
       cooldown: 0
     };
 
-    this.items.push(itemData);
+    this.registerItem(itemData);
     if (this.sound) this.sound.playPop();
     return itemData;
   }
@@ -213,7 +220,7 @@ export class PlayableItemsSystem {
       cooldown: 0
     };
 
-    this.items.push(itemData);
+    this.registerItem(itemData);
     if (this.sound) this.sound.playPop();
     return itemData;
   }
@@ -251,7 +258,7 @@ export class PlayableItemsSystem {
       cooldown: 0
     };
 
-    this.items.push(itemData);
+    this.registerItem(itemData);
     if (this.sound) this.sound.playPop();
     return itemData;
   }
@@ -363,6 +370,7 @@ export class PlayableItemsSystem {
 
           // Consumable treats get removed on interact
           if (item.type === 'fish' || item.type === 'milk') {
+            this.worldPhysics?.unregister(item.group);
             this.scene.remove(item.group);
             this.items.splice(i, 1);
           }

@@ -160,6 +160,9 @@ export class UIManager {
     // 7. GLB Export Buttons
     const topExportBtn = document.getElementById('btn-export-glb');
     const charExportBtn = document.getElementById('btn-export-character-glb');
+    const livestockExportBtn = document.getElementById('btn-export-livestock-glb');
+    const cropsExportBtn = document.getElementById('btn-export-crops-glb');
+    const tilesExportBtn = document.getElementById('btn-export-tiles-glb');
     const sceneExportBtn = document.getElementById('btn-export-scene-glb');
 
     const handleCharExport = async () => {
@@ -169,6 +172,44 @@ export class UIManager {
         this.showToast('✓ Character .GLB successfully exported!');
       } catch (err) {
         this.showToast('Export failed. Check console.');
+      }
+    };
+
+    const handleLivestockExport = async () => {
+      this.showToast('Exporting Rigged Livestock .GLB (Cow, Chicken, Sheep, Pig)...');
+      try {
+        for (const sp of ['cow', 'chicken', 'sheep', 'pig']) {
+          await GLTFExportManager.exportAnimal(sp);
+        }
+        this.showToast('✓ All 4 Rigged Livestock .GLB exported!');
+      } catch (err) {
+        this.showToast('Livestock export failed.');
+      }
+    };
+
+    const handleCropsExport = async () => {
+      this.showToast('Exporting 4-Stage Crops .GLB (Wheat, Corn, Tomato, Carrot)...');
+      try {
+        for (const cr of ['wheat', 'corn', 'tomato', 'carrot']) {
+          for (const st of ['sprout', 'early', 'mature', 'wilted']) {
+            await GLTFExportManager.exportCrop(cr, st);
+          }
+        }
+        this.showToast('✓ All 16 Modular Crop States exported!');
+      } catch (err) {
+        this.showToast('Crops export failed.');
+      }
+    };
+
+    const handleTilesExport = async () => {
+      this.showToast('Exporting 1m Modular Terraforming Blocks .GLB...');
+      try {
+        for (const tl of ['untilled', 'tilled', 'watered', 'grass', 'rocks']) {
+          await GLTFExportManager.exportTile(tl);
+        }
+        this.showToast('✓ All 5 Modular Terraforming Blocks exported!');
+      } catch (err) {
+        this.showToast('Tiles export failed.');
       }
     };
 
@@ -184,6 +225,9 @@ export class UIManager {
 
     if (topExportBtn) topExportBtn.addEventListener('click', () => this.inspectorPanel.classList.remove('hidden'));
     if (charExportBtn) charExportBtn.addEventListener('click', handleCharExport);
+    if (livestockExportBtn) livestockExportBtn.addEventListener('click', handleLivestockExport);
+    if (cropsExportBtn) cropsExportBtn.addEventListener('click', handleCropsExport);
+    if (tilesExportBtn) tilesExportBtn.addEventListener('click', handleTilesExport);
     if (sceneExportBtn) sceneExportBtn.addEventListener('click', handleSceneExport);
 
     // 8. Mobile Action Buttons
@@ -337,9 +381,14 @@ export class UIManager {
     if (buildBtn) {
       buildBtn.addEventListener('click', () => {
         const reqs = this.game.kittyHome.getStageRequirements();
+        const placement = this.game.kittyHome.validateSite();
+        if (this.game.kittyHome.placementActive || !placement.valid) {
+          this.showToast(placement.reason || 'Confirm the building site first');
+          return;
+        }
         if (reqs && this.game.shop.canAffordHomeStage(reqs)) {
+          if (!this.game.kittyHome.upgradeStage()) return;
           this.game.shop.consumeMaterialsForHome(reqs);
-          this.game.kittyHome.upgradeStage();
           this.showToast(`🔨 ${reqs.title} Completed!`);
           this.openHouseGuideModal(); // Refresh modal
           this.updateMaterialStock();
@@ -394,6 +443,12 @@ export class UIManager {
     if (styleNameEl) styleNameEl.textContent = `Architectural Style: ${info.styleName}`;
     if (phaseTitleEl) phaseTitleEl.textContent = info.stageTitle;
     if (phaseDescEl) phaseDescEl.textContent = info.stageDesc;
+    const buildBtn = document.getElementById('btn-build-now');
+    if (buildBtn) {
+      const placement = this.game.kittyHome.validateSite();
+      buildBtn.disabled = this.game.kittyHome.placementActive || !placement.valid;
+      buildBtn.title = placement.reason || '';
+    }
 
     // Render Checklist
     if (checklistEl) {
