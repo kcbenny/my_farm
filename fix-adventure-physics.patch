@@ -1,0 +1,371 @@
+From 2dff82b601e8db0f9f915b241a3e3b05962435cd Mon Sep 17 00:00:00 2001
+From: Benny Cheung <benny@example.com>
+Date: Sat, 26 Sep 2026 22:02:50 +0800
+Subject: [PATCH 1/2] Fix: player sinking in adventure maps (Ancient Ruins)
+
+Root cause: clampToGround() was calling getGroundHeightAt() which uses
+raycast to find terrain. In adventure maps, raycast misses the farm
+terrain mesh and falls back to groundY=0, causing player to sink.
+
+Fix: For adventure map detection (|x|>55 or |z|>55), directly use
+adventureGroundY instead of calling getGroundHeightAt() to avoid
+incorrect raycast fallback to 0.
+---
+ .gitignore                                  |   0
+ Gemini_Generated_Image_419l43419l43419l.jpg | Bin
+ Gemini_Generated_Image_dbieesdbieesdbie.jpg | Bin
+ README.md                                   |   0
+ checklist.txt                               |   0
+ index.html                                  |   0
+ package-lock.json                           |   0
+ package.json                                |   0
+ prompt_list.txt                             |   0
+ src/assets/PBRTextureGenerator.js           |   0
+ src/character/CatAnimations.js              |   0
+ src/character/CatCharacter.js               |   0
+ src/character/CatCharactersConfig.js        |   0
+ src/character/CatModelBuilder.js            |   0
+ src/gameplay/CropSystem.js                  |   0
+ src/gameplay/GLTFExportManager.js           |   0
+ src/gameplay/GeometryColliders.js           |   0
+ src/gameplay/KittyHomeSystem.js             |   0
+ src/gameplay/PeashooterWeapon.js            |   0
+ src/gameplay/PestSystem.js                  |   0
+ src/gameplay/PlayableItemsSystem.js         |   0
+ src/gameplay/PlayerController.js            |   0
+ src/gameplay/PlayerPhysicsSystem.js         |  10 ++++++++--
+ src/gameplay/ShopSystem.js                  |   0
+ src/gameplay/SoundSystem.js                 |   0
+ src/gameplay/WorldPhysics.js                |   0
+ src/gameplay/WorldPhysics.test.js           |   0
+ src/main.js                                 |   0
+ src/styles/character-select.css             |   0
+ src/styles/main.css                         |   0
+ src/styles/shop.css                         |   0
+ src/ui/CharacterSelectManager.js            |   0
+ src/ui/MapSystem.js                         |   0
+ src/ui/UIManager.js                         |   0
+ src/world/AncientRuins.js                   |   0
+ src/world/AnimalAnimations.js               |   0
+ src/world/AnimalModelBuilder.js             |   0
+ src/world/BarnModel.js                      |   0
+ src/world/CozySceneModels.js                |   0
+ src/world/EnchantedForest.js                |   0
+ src/world/FarmEnvironment.js                |   0
+ src/world/HarvestMaze.js                    |   0
+ src/world/LivestockSystem.js                |   0
+ src/world/MapManager.js                     |   0
+ src/world/ModularCropModels.js              |   0
+ src/world/ModularTileSystem.js              |   0
+ src/world/MysticLake.js                     |   0
+ src/world/PondModel.js                      |   0
+ src/world/PortalSystem.js                   |   0
+ src/world/SecretFishingSpot.js              |   0
+ src/world/ShopStallModel.js                 |   0
+ src/world/SnowyMountain.js                  |   0
+ src/world/StarryMeadow.js                   |   0
+ src/world/TreeModelBuilder.js               |   0
+ src/world/WindmillModel.js                  |   0
+ vite.config.js                              |   0
+ 56 files changed, 8 insertions(+), 2 deletions(-)
+ mode change 100644 => 100755 .gitignore
+ mode change 100644 => 100755 Gemini_Generated_Image_419l43419l43419l.jpg
+ mode change 100644 => 100755 Gemini_Generated_Image_dbieesdbieesdbie.jpg
+ mode change 100644 => 100755 README.md
+ mode change 100644 => 100755 checklist.txt
+ mode change 100644 => 100755 index.html
+ mode change 100644 => 100755 package-lock.json
+ mode change 100644 => 100755 package.json
+ mode change 100644 => 100755 prompt_list.txt
+ mode change 100644 => 100755 src/assets/PBRTextureGenerator.js
+ mode change 100644 => 100755 src/character/CatAnimations.js
+ mode change 100644 => 100755 src/character/CatCharacter.js
+ mode change 100644 => 100755 src/character/CatCharactersConfig.js
+ mode change 100644 => 100755 src/character/CatModelBuilder.js
+ mode change 100644 => 100755 src/gameplay/CropSystem.js
+ mode change 100644 => 100755 src/gameplay/GLTFExportManager.js
+ mode change 100644 => 100755 src/gameplay/GeometryColliders.js
+ mode change 100644 => 100755 src/gameplay/KittyHomeSystem.js
+ mode change 100644 => 100755 src/gameplay/PeashooterWeapon.js
+ mode change 100644 => 100755 src/gameplay/PestSystem.js
+ mode change 100644 => 100755 src/gameplay/PlayableItemsSystem.js
+ mode change 100644 => 100755 src/gameplay/PlayerController.js
+ mode change 100644 => 100755 src/gameplay/PlayerPhysicsSystem.js
+ mode change 100644 => 100755 src/gameplay/ShopSystem.js
+ mode change 100644 => 100755 src/gameplay/SoundSystem.js
+ mode change 100644 => 100755 src/gameplay/WorldPhysics.js
+ mode change 100644 => 100755 src/gameplay/WorldPhysics.test.js
+ mode change 100644 => 100755 src/main.js
+ mode change 100644 => 100755 src/styles/character-select.css
+ mode change 100644 => 100755 src/styles/main.css
+ mode change 100644 => 100755 src/styles/shop.css
+ mode change 100644 => 100755 src/ui/CharacterSelectManager.js
+ mode change 100644 => 100755 src/ui/MapSystem.js
+ mode change 100644 => 100755 src/ui/UIManager.js
+ mode change 100644 => 100755 src/world/AncientRuins.js
+ mode change 100644 => 100755 src/world/AnimalAnimations.js
+ mode change 100644 => 100755 src/world/AnimalModelBuilder.js
+ mode change 100644 => 100755 src/world/BarnModel.js
+ mode change 100644 => 100755 src/world/CozySceneModels.js
+ mode change 100644 => 100755 src/world/EnchantedForest.js
+ mode change 100644 => 100755 src/world/FarmEnvironment.js
+ mode change 100644 => 100755 src/world/HarvestMaze.js
+ mode change 100644 => 100755 src/world/LivestockSystem.js
+ mode change 100644 => 100755 src/world/MapManager.js
+ mode change 100644 => 100755 src/world/ModularCropModels.js
+ mode change 100644 => 100755 src/world/ModularTileSystem.js
+ mode change 100644 => 100755 src/world/MysticLake.js
+ mode change 100644 => 100755 src/world/PondModel.js
+ mode change 100644 => 100755 src/world/PortalSystem.js
+ mode change 100644 => 100755 src/world/SecretFishingSpot.js
+ mode change 100644 => 100755 src/world/ShopStallModel.js
+ mode change 100644 => 100755 src/world/SnowyMountain.js
+ mode change 100644 => 100755 src/world/StarryMeadow.js
+ mode change 100644 => 100755 src/world/TreeModelBuilder.js
+ mode change 100644 => 100755 src/world/WindmillModel.js
+ mode change 100644 => 100755 vite.config.js
+
+diff --git a/.gitignore b/.gitignore
+old mode 100644
+new mode 100755
+diff --git a/Gemini_Generated_Image_419l43419l43419l.jpg b/Gemini_Generated_Image_419l43419l43419l.jpg
+old mode 100644
+new mode 100755
+diff --git a/Gemini_Generated_Image_dbieesdbieesdbie.jpg b/Gemini_Generated_Image_dbieesdbieesdbie.jpg
+old mode 100644
+new mode 100755
+diff --git a/README.md b/README.md
+old mode 100644
+new mode 100755
+diff --git a/checklist.txt b/checklist.txt
+old mode 100644
+new mode 100755
+diff --git a/index.html b/index.html
+old mode 100644
+new mode 100755
+diff --git a/package-lock.json b/package-lock.json
+old mode 100644
+new mode 100755
+diff --git a/package.json b/package.json
+old mode 100644
+new mode 100755
+diff --git a/prompt_list.txt b/prompt_list.txt
+old mode 100644
+new mode 100755
+diff --git a/src/assets/PBRTextureGenerator.js b/src/assets/PBRTextureGenerator.js
+old mode 100644
+new mode 100755
+diff --git a/src/character/CatAnimations.js b/src/character/CatAnimations.js
+old mode 100644
+new mode 100755
+diff --git a/src/character/CatCharacter.js b/src/character/CatCharacter.js
+old mode 100644
+new mode 100755
+diff --git a/src/character/CatCharactersConfig.js b/src/character/CatCharactersConfig.js
+old mode 100644
+new mode 100755
+diff --git a/src/character/CatModelBuilder.js b/src/character/CatModelBuilder.js
+old mode 100644
+new mode 100755
+diff --git a/src/gameplay/CropSystem.js b/src/gameplay/CropSystem.js
+old mode 100644
+new mode 100755
+diff --git a/src/gameplay/GLTFExportManager.js b/src/gameplay/GLTFExportManager.js
+old mode 100644
+new mode 100755
+diff --git a/src/gameplay/GeometryColliders.js b/src/gameplay/GeometryColliders.js
+old mode 100644
+new mode 100755
+diff --git a/src/gameplay/KittyHomeSystem.js b/src/gameplay/KittyHomeSystem.js
+old mode 100644
+new mode 100755
+diff --git a/src/gameplay/PeashooterWeapon.js b/src/gameplay/PeashooterWeapon.js
+old mode 100644
+new mode 100755
+diff --git a/src/gameplay/PestSystem.js b/src/gameplay/PestSystem.js
+old mode 100644
+new mode 100755
+diff --git a/src/gameplay/PlayableItemsSystem.js b/src/gameplay/PlayableItemsSystem.js
+old mode 100644
+new mode 100755
+diff --git a/src/gameplay/PlayerController.js b/src/gameplay/PlayerController.js
+old mode 100644
+new mode 100755
+diff --git a/src/gameplay/PlayerPhysicsSystem.js b/src/gameplay/PlayerPhysicsSystem.js
+old mode 100644
+new mode 100755
+index 5859b66..3614bc6
+--- a/src/gameplay/PlayerPhysicsSystem.js
++++ b/src/gameplay/PlayerPhysicsSystem.js
+@@ -52,7 +52,14 @@ export class PlayerPhysicsSystem {
+ 
+   clampToGround() {
+     const controller = this.controller;
+-    const groundHeight = this.getGroundHeightAt(controller.position.x, controller.position.z);
++    const inAdventure = Math.abs(controller.position.x) > 55 || Math.abs(controller.position.z) > 55;
++    // For adventure maps, use adventureGroundY directly to avoid raycast missing farm terrain
++    let groundHeight;
++    if (inAdventure) {
++      groundHeight = controller.adventureGroundY ?? 0;
++    } else {
++      groundHeight = this.getGroundHeightAt(controller.position.x, controller.position.z);
++    }
+     const pivotOffset = controller.cat.mesh.userData.playerPivotOffset || 0;
+     controller.jumpOffset = Math.max(0, controller.jumpOffset || 0);
+     const floor = groundHeight + pivotOffset;
+@@ -61,7 +68,6 @@ export class PlayerPhysicsSystem {
+     }
+     const desiredY = floor + controller.jumpOffset;
+     let resolvedY = desiredY;
+-    const inAdventure = Math.abs(controller.position.x) > 55 || Math.abs(controller.position.z) > 55;
+     if (!inAdventure && this.worldPhysics && controller.position.y >= floor && desiredY !== controller.position.y) {
+       const startY = controller.position.y;
+       const steps = Math.max(1, Math.ceil(Math.abs(desiredY - startY) / (this.playerRadius * 0.5)));
+diff --git a/src/gameplay/ShopSystem.js b/src/gameplay/ShopSystem.js
+old mode 100644
+new mode 100755
+diff --git a/src/gameplay/SoundSystem.js b/src/gameplay/SoundSystem.js
+old mode 100644
+new mode 100755
+diff --git a/src/gameplay/WorldPhysics.js b/src/gameplay/WorldPhysics.js
+old mode 100644
+new mode 100755
+diff --git a/src/gameplay/WorldPhysics.test.js b/src/gameplay/WorldPhysics.test.js
+old mode 100644
+new mode 100755
+diff --git a/src/main.js b/src/main.js
+old mode 100644
+new mode 100755
+diff --git a/src/styles/character-select.css b/src/styles/character-select.css
+old mode 100644
+new mode 100755
+diff --git a/src/styles/main.css b/src/styles/main.css
+old mode 100644
+new mode 100755
+diff --git a/src/styles/shop.css b/src/styles/shop.css
+old mode 100644
+new mode 100755
+diff --git a/src/ui/CharacterSelectManager.js b/src/ui/CharacterSelectManager.js
+old mode 100644
+new mode 100755
+diff --git a/src/ui/MapSystem.js b/src/ui/MapSystem.js
+old mode 100644
+new mode 100755
+diff --git a/src/ui/UIManager.js b/src/ui/UIManager.js
+old mode 100644
+new mode 100755
+diff --git a/src/world/AncientRuins.js b/src/world/AncientRuins.js
+old mode 100644
+new mode 100755
+diff --git a/src/world/AnimalAnimations.js b/src/world/AnimalAnimations.js
+old mode 100644
+new mode 100755
+diff --git a/src/world/AnimalModelBuilder.js b/src/world/AnimalModelBuilder.js
+old mode 100644
+new mode 100755
+diff --git a/src/world/BarnModel.js b/src/world/BarnModel.js
+old mode 100644
+new mode 100755
+diff --git a/src/world/CozySceneModels.js b/src/world/CozySceneModels.js
+old mode 100644
+new mode 100755
+diff --git a/src/world/EnchantedForest.js b/src/world/EnchantedForest.js
+old mode 100644
+new mode 100755
+diff --git a/src/world/FarmEnvironment.js b/src/world/FarmEnvironment.js
+old mode 100644
+new mode 100755
+diff --git a/src/world/HarvestMaze.js b/src/world/HarvestMaze.js
+old mode 100644
+new mode 100755
+diff --git a/src/world/LivestockSystem.js b/src/world/LivestockSystem.js
+old mode 100644
+new mode 100755
+diff --git a/src/world/MapManager.js b/src/world/MapManager.js
+old mode 100644
+new mode 100755
+diff --git a/src/world/ModularCropModels.js b/src/world/ModularCropModels.js
+old mode 100644
+new mode 100755
+diff --git a/src/world/ModularTileSystem.js b/src/world/ModularTileSystem.js
+old mode 100644
+new mode 100755
+diff --git a/src/world/MysticLake.js b/src/world/MysticLake.js
+old mode 100644
+new mode 100755
+diff --git a/src/world/PondModel.js b/src/world/PondModel.js
+old mode 100644
+new mode 100755
+diff --git a/src/world/PortalSystem.js b/src/world/PortalSystem.js
+old mode 100644
+new mode 100755
+diff --git a/src/world/SecretFishingSpot.js b/src/world/SecretFishingSpot.js
+old mode 100644
+new mode 100755
+diff --git a/src/world/ShopStallModel.js b/src/world/ShopStallModel.js
+old mode 100644
+new mode 100755
+diff --git a/src/world/SnowyMountain.js b/src/world/SnowyMountain.js
+old mode 100644
+new mode 100755
+diff --git a/src/world/StarryMeadow.js b/src/world/StarryMeadow.js
+old mode 100644
+new mode 100755
+diff --git a/src/world/TreeModelBuilder.js b/src/world/TreeModelBuilder.js
+old mode 100644
+new mode 100755
+diff --git a/src/world/WindmillModel.js b/src/world/WindmillModel.js
+old mode 100644
+new mode 100755
+diff --git a/vite.config.js b/vite.config.js
+old mode 100644
+new mode 100755
+-- 
+2.34.1
+
+
+From 51b8465a1152a33b4948b31861efec97a46ce7f9 Mon Sep 17 00:00:00 2001
+From: Benny Cheung <benny@example.com>
+Date: Sat, 26 Sep 2026 22:29:59 +0800
+Subject: [PATCH 2/2] Fix: adventure map player physics (sinking + movement)
+
+- clampToGround: use adventureGroundY directly in adventure maps
+  instead of getGroundHeightAt() which relies on worldPhysics raycast
+- movePlayer: use adventureGroundY directly for ground height in
+  adventure maps; skip horizontal collision check in adventure maps
+  since worldPhysics only tracks farm obstacles
+- Prevents player sinking and movement issues on Ancient Ruins and
+  other adventure maps
+---
+ src/gameplay/PlayerPhysicsSystem.js | 10 ++++++----
+ 1 file changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/src/gameplay/PlayerPhysicsSystem.js b/src/gameplay/PlayerPhysicsSystem.js
+index 3614bc6..5243cfc 100755
+--- a/src/gameplay/PlayerPhysicsSystem.js
++++ b/src/gameplay/PlayerPhysicsSystem.js
+@@ -102,15 +102,17 @@ export class PlayerPhysicsSystem {
+     const steps = Math.max(1, Math.ceil(displacement.length() / (this.playerRadius * 0.5)));
+     const step = displacement.clone().divideScalar(steps);
+     const inAdventure = Math.abs(controller.position.x) > 55 || Math.abs(controller.position.z) > 55;
++    const pivotOffset = controller.cat.mesh.userData.playerPivotOffset || 0;
++    const adventureGround = inAdventure ? (controller.adventureGroundY ?? 0) : null;
+     for (let index = 0; index < steps; index++) {
+       const previousPosition = controller.position.clone();
+-      const currentGround = this.getGroundHeightAt(previousPosition.x, previousPosition.z);
++      const currentGround = adventureGround !== null ? adventureGround : this.getGroundHeightAt(previousPosition.x, previousPosition.z);
+       const candidate = previousPosition.clone().add(step);
+       if (!inAdventure && this.worldPhysics && !this.worldPhysics.surfaceAt(candidate.x, candidate.z)) break;
+-      const nextGround = this.getGroundHeightAt(candidate.x, candidate.z);
++      const nextGround = adventureGround !== null ? adventureGround : this.getGroundHeightAt(candidate.x, candidate.z);
+       if (controller.isGrounded && nextGround - currentGround > this.maxTerrainStep) break;
+-      candidate.y = nextGround + (controller.cat.mesh.userData.playerPivotOffset || 0) + Math.max(0, controller.jumpOffset || 0);
+-      if (this.hasHorizontalCollision(candidate)) break;
++      candidate.y = nextGround + pivotOffset + Math.max(0, controller.jumpOffset || 0);
++      if (!inAdventure && this.hasHorizontalCollision(candidate)) break;
+       controller.position.copy(candidate);
+       this.resolveCollision?.({ position: controller.position, previousPosition }, this.playerRadius);
+     }
+-- 
+2.34.1
+

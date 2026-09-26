@@ -52,7 +52,14 @@ export class PlayerPhysicsSystem {
 
   clampToGround() {
     const controller = this.controller;
-    const groundHeight = this.getGroundHeightAt(controller.position.x, controller.position.z);
+    const inAdventure = Math.abs(controller.position.x) > 55 || Math.abs(controller.position.z) > 55;
+    // For adventure maps, use adventureGroundY directly to avoid raycast missing farm terrain
+    let groundHeight;
+    if (inAdventure) {
+      groundHeight = controller.adventureGroundY ?? 0;
+    } else {
+      groundHeight = this.getGroundHeightAt(controller.position.x, controller.position.z);
+    }
     const pivotOffset = controller.cat.mesh.userData.playerPivotOffset || 0;
     controller.jumpOffset = Math.max(0, controller.jumpOffset || 0);
     const floor = groundHeight + pivotOffset;
@@ -61,7 +68,6 @@ export class PlayerPhysicsSystem {
     }
     const desiredY = floor + controller.jumpOffset;
     let resolvedY = desiredY;
-    const inAdventure = Math.abs(controller.position.x) > 55 || Math.abs(controller.position.z) > 55;
     if (!inAdventure && this.worldPhysics && controller.position.y >= floor && desiredY !== controller.position.y) {
       const startY = controller.position.y;
       const steps = Math.max(1, Math.ceil(Math.abs(desiredY - startY) / (this.playerRadius * 0.5)));
@@ -96,15 +102,17 @@ export class PlayerPhysicsSystem {
     const steps = Math.max(1, Math.ceil(displacement.length() / (this.playerRadius * 0.5)));
     const step = displacement.clone().divideScalar(steps);
     const inAdventure = Math.abs(controller.position.x) > 55 || Math.abs(controller.position.z) > 55;
+    const pivotOffset = controller.cat.mesh.userData.playerPivotOffset || 0;
+    const adventureGround = inAdventure ? (controller.adventureGroundY ?? 0) : null;
     for (let index = 0; index < steps; index++) {
       const previousPosition = controller.position.clone();
-      const currentGround = this.getGroundHeightAt(previousPosition.x, previousPosition.z);
+      const currentGround = adventureGround !== null ? adventureGround : this.getGroundHeightAt(previousPosition.x, previousPosition.z);
       const candidate = previousPosition.clone().add(step);
       if (!inAdventure && this.worldPhysics && !this.worldPhysics.surfaceAt(candidate.x, candidate.z)) break;
-      const nextGround = this.getGroundHeightAt(candidate.x, candidate.z);
+      const nextGround = adventureGround !== null ? adventureGround : this.getGroundHeightAt(candidate.x, candidate.z);
       if (controller.isGrounded && nextGround - currentGround > this.maxTerrainStep) break;
-      candidate.y = nextGround + (controller.cat.mesh.userData.playerPivotOffset || 0) + Math.max(0, controller.jumpOffset || 0);
-      if (this.hasHorizontalCollision(candidate)) break;
+      candidate.y = nextGround + pivotOffset + Math.max(0, controller.jumpOffset || 0);
+      if (!inAdventure && this.hasHorizontalCollision(candidate)) break;
       controller.position.copy(candidate);
       this.resolveCollision?.({ position: controller.position, previousPosition }, this.playerRadius);
     }
