@@ -11,7 +11,8 @@ export class MapSystem {
       crops: { id: 'crops', name: 'Garden Plots 🌾', x: 2.0, z: 0.0, icon: '🌾', color: '#52b788' },
       barn: { id: 'barn', name: 'Rustic Barn 🛖', x: -14.0, z: -22.0, icon: '🛖', color: '#bc4749' },
       windmill: { id: 'windmill', name: 'Windmill ⚙️', x: 22.0, z: -16.0, icon: '⚙️', color: '#48cae4' },
-      pond: { id: 'pond', name: 'Cozy Pond 🌊', x: -18.0, z: 10.0, icon: '🌊', color: '#0077b6' }
+      pond: { id: 'pond', name: 'Cozy Pond 🌊', x: -18.0, z: 10.0, icon: '🌊', color: '#0077b6' },
+      secretPond: { id: 'secretPond', name: 'Secret Fishing Spot 🎣', x: 42.0, z: 30.0, icon: '🎣', color: '#69f5c8' }
     };
 
     // Active destination for path drawing
@@ -111,7 +112,16 @@ export class MapSystem {
                   <span id="dist-windmill">0m away</span>
                 </div>
               </button>
+              <button class="dest-btn" data-dest="secretPond">
+                <span class="dest-icon">🎣</span>
+                <div class="dest-info">
+                  <strong>Secret Fishing Spot</strong>
+                  <span id="dist-secretPond">0m away</span>
+                </div>
+              </button>
             </div>
+
+            <button id="btn-travel-secret" class="dest-btn map-travel-btn">✨ Travel to Secret Fishing Spot</button>
 
             <div class="map-legend">
               <p>🐱 <strong>Yellow Arrow:</strong> You (Kitty)</p>
@@ -144,6 +154,19 @@ export class MapSystem {
       closeMapBtn.addEventListener('click', () => {
         this.fullmapModal.classList.add('hidden');
       });
+    }
+
+    const travelBtn = document.getElementById('btn-travel-secret');
+    if (travelBtn) {
+      travelBtn.addEventListener('click', () => {
+        if (this.game.isAtSecretFishingSpot()) {
+          this.game.returnToFarm();
+        } else {
+          this.game.travelToFishingSpot();
+        }
+        this.fullmapModal.classList.add('hidden');
+      });
+      this.travelBtn = travelBtn;
     }
 
     // Destination Select Buttons
@@ -204,6 +227,7 @@ export class MapSystem {
     if (this.fullmapModal && !this.fullmapModal.classList.contains('hidden')) {
       this.renderCanvasMap(this.fullmapCtx, 400, 400, playerPos, playerRotation, false);
       this.updateSidebarDistances(playerPos);
+      this.updateTravelButton();
     }
 
     // 3. Update 3D World Waypoint Path Guide
@@ -220,6 +244,13 @@ export class MapSystem {
         el.textContent = `${dist}m away`;
       }
     }
+  }
+
+  updateTravelButton() {
+    if (!this.travelBtn) return;
+    this.travelBtn.textContent = this.game.isAtSecretFishingSpot()
+      ? '✨ Return to Cozy Farm'
+      : '✨ Travel to Secret Fishing Spot';
   }
 
   update3DPathDots(playerPos) {
@@ -270,8 +301,8 @@ export class MapSystem {
     const centerX = width / 2;
     const centerY = height / 2;
 
-    // Scale: World farm size (-38m to +38m = 76m wide)
-    const scale = width / 80.0;
+    // Include the hidden forest clearing beyond the main farm boundary.
+    const scale = width / 110.0;
 
     // World to Canvas coord conversion
     const worldToCanvas = (wx, wz) => {

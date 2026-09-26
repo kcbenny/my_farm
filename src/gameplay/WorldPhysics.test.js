@@ -7,6 +7,8 @@ import { KittyHomeSystem } from './KittyHomeSystem.js';
 import { CropSystem } from './CropSystem.js';
 import { PlayableItemsSystem } from './PlayableItemsSystem.js';
 import { GLTFExportManager } from './GLTFExportManager.js';
+import { TreeModelBuilder } from '../world/TreeModelBuilder.js';
+import { FarmEnvironment } from '../world/FarmEnvironment.js';
 
 function setupWorld() {
   const scene = new THREE.Scene();
@@ -19,6 +21,25 @@ function setupWorld() {
   return world;
 }
 
+test('reference-style trees have batched foliage and only solid trunks', () => {
+  for (const species of ['oak', 'apple', 'blossom', 'autumn', 'birch', 'willow', 'pine']) {
+    const world = setupWorld();
+    const tree = TreeModelBuilder.create(species, 1, 7);
+    normalizeAsset(tree, 'tree', 4.5);
+    world.scene.add(tree);
+    world.register(tree);
+    const bounds = new THREE.Box3().setFromObject(tree);
+    assert.ok(Math.abs(bounds.max.y - bounds.min.y - 4.5) < 0.001, species);
+    assert.equal(world.obstacles.length, 1, species);
+    assert.equal(world.obstacles[0].mesh.name, 'Trunk');
+    const leaves = tree.getObjectByName('Individual_Leaves');
+    assert.ok(leaves.isInstancedMesh && leaves.count > 1000, species);
+    assert.ok(leaves.instanceMatrix.array.every(Number.isFinite), species);
+    assert.ok(leaves.instanceColor.array.every(Number.isFinite), species);
+    assert.ok(tree.getObjectByName('Tree_Crown').userData.physics === false);
+  }
+});
+
 function addBox(world, type, size, position) {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(...size));
   mesh.userData.type = type;
@@ -27,6 +48,60 @@ function addBox(world, type, size, position) {
   world.register(mesh);
   return mesh;
 }
+
+test('harvest lifts and collects the crop before allowing replanting', () => {
+  const scene = new THREE.Scene();
+  const system = new CropSystem(scene, [{ x: 0, z: 0, type: 'pumpkin', name: 'Pumpkins' }]);
+  const crop = system.crops[0];
+  const harvestedMesh = crop.mesh;
+  const start = harvestedMesh.position.clone();
+  const collector = new THREE.Group();
+  collector.position.set(1, 0, 1);
+  scene.add(collector);
+  let geometryDisposed = false;
+  let materialDisposed = false;
+  harvestedMesh.children[0].children[0].geometry.addEventListener('dispose', () => { geometryDisposed = true; });
+  system.materials.pumpkinOrange.addEventListener('dispose', () => { materialDisposed = true; });
+
+  assert.equal(system.harvestCrop(crop, collector).coins, 30);
+  assert.equal(crop.stage, 'harvesting');
+  assert.equal(harvestedMesh.parent, scene);
+  assert.equal(system.harvestCrop(crop, collector), null);
+  assert.equal(system.plantSeed(crop, 'pumpkin'), false);
+  assert.equal(system.getNearestHarvestableCrop(crop.position, 0.5), null);
+  assert.equal(system.getNearestEmptyPlot(crop.position, 0.5), null);
+
+  system.update(0.1);
+  assert.ok(harvestedMesh.scale.y < 1);
+  system.update(0.3);
+  assert.ok(harvestedMesh.position.y > start.y);
+  assert.equal(harvestedMesh.parent, scene);
+  system.update(0.6);
+  assert.ok(harvestedMesh.position.x > start.x);
+  assert.ok(harvestedMesh.scale.x > 0 && harvestedMesh.scale.x < 0.8);
+  collector.position.x = 2;
+  system.update(0.21);
+  assert.equal(harvestedMesh.parent, null);
+  assert.equal(harvestedMesh.position.x, collector.position.x);
+  assert.equal(crop.stage, 'wilted');
+  assert.equal(system.harvestAnimations.length, 0);
+  assert.equal(geometryDisposed, true);
+  assert.equal(materialDisposed, false);
+  assert.equal(system.getNearestEmptyPlot(crop.position, 0.5), crop);
+  assert.equal(system.plantSeed(crop, 'pumpkin'), true);
+});
+
+test('harvest handles concurrent crops and a frame longer than the animation', () => {
+  const scene = new THREE.Scene();
+  const system = new CropSystem(scene, [{ x: 0, z: 0, type: 'pumpkin', name: 'Pumpkins' }]);
+  const crops = system.crops.slice(0, 2);
+  const meshes = crops.map(crop => crop.mesh);
+  crops.forEach(crop => system.harvestCrop(crop));
+  system.update(2);
+  assert.equal(system.harvestAnimations.length, 0);
+  crops.forEach(crop => assert.equal(crop.stage, 'wilted'));
+  meshes.forEach(mesh => assert.equal(mesh.parent, null));
+});
 
 test('classification honors metadata and inherited roles for imported hierarchies', () => {
   const world = setupWorld();
@@ -206,4 +281,55 @@ test('upward movement is stopped beneath an obstacle ceiling', () => {
   physics.clampToGround();
   assert.ok(controller.position.y < 0.7);
   assert.equal(controller.verticalVelocity, 0);
+});
+
+test('faceted terrain retains the farm boundary and has a separate rocky mountain backdrop', () => {
+  const farm = Object.create(FarmEnvironment.prototype);
+  farm.scene = new THREE.Scene();
+  farm.physics = new WorldPhysics(farm.scene);
+  farm.collidableObjects = [];
+  farm.boundaryObjects = [];
+  farm.createTerrain();
+  const bounds = new THREE.Box3().setFromObject(farm.terrainMesh);
+  assert.equal(bounds.min.x, -48);
+  assert.equal(bounds.max.x, 48);
+  assert.equal(bounds.min.z, -48);
+  assert.equal(bounds.max.z, 48);
+  assert.equal(farm.physics.surfaces.length, 1);
+  assert.equal(farm.mountainMesh.userData.physics, false);
+  assert.ok(farm.getTerrainHeight(-42, -82) > 30);
+  assert.ok(farm.getTerrainHeight(0, 0) < 1);
+  assert.ok(farm.getTerrainHeight(33, -30) > 5);
+  farm.setupLighting();
+  farm.setLightingPreset('day');
+  assert.ok(farm.scene.fog.density < 0.004);
+  const backdropVertices = farm.mountainMesh.geometry.attributes.position;
+  const boundaryHeights = new Map();
+  for (let index = 0; index < backdropVertices.count; index++) {
+    const horizontal = backdropVertices.getX(index);
+    const depth = backdropVertices.getZ(index);
+    if (Math.abs(horizontal) === 48 && Math.abs(depth) <= 48) assert.ok(farm.terrainCoordinates.includes(depth));
+    if (Math.abs(depth) === 48 && Math.abs(horizontal) <= 48) assert.ok(farm.terrainCoordinates.includes(horizontal));
+    if (Math.abs(horizontal) === 48 || Math.abs(depth) === 48) boundaryHeights.set(`${horizontal},${depth}`, backdropVertices.getY(index));
+  }
+  const groundVertices = farm.terrainMesh.geometry.attributes.position;
+  for (let index = 0; index < groundVertices.count; index++) {
+    const horizontal = groundVertices.getX(index);
+    const depth = groundVertices.getZ(index);
+    if (Math.abs(horizontal) === 48 || Math.abs(depth) === 48) {
+      assert.equal(boundaryHeights.get(`${horizontal},${depth}`), groundVertices.getY(index));
+    }
+  }
+  const player = new THREE.Group();
+  player.userData.playerPivotOffset = 0.2;
+  const controller = { cat: { mesh: player }, position: new THREE.Vector3(33, -10, -30), jumpOffset: 0, verticalVelocity: 0 };
+  new PlayerPhysicsSystem({ controller, worldPhysics: farm.physics }).clampToGround();
+  assert.ok(Math.abs(controller.position.y - farm.getTerrainHeight(33, -30) - 0.2) < 0.001);
+  for (const mesh of [farm.terrainMesh, farm.mountainMesh]) {
+    assert.ok(mesh.geometry.attributes.position.array.every(Number.isFinite));
+    assert.ok(mesh.geometry.attributes.color.array.every(Number.isFinite));
+    const normals = mesh.geometry.attributes.normal;
+    for (let index = 0; index < normals.count; index++) assert.ok(normals.getY(index) > 0);
+    assert.ok(new Set(mesh.geometry.attributes.color.array).size > 50);
+  }
 });

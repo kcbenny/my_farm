@@ -4,6 +4,31 @@
  */
 
 export const CAT_CHARACTERS = {
+  pearl: {
+    id: 'pearl',
+    name: 'Pearl',
+    title: 'The Yarn-Bow Kitten',
+    subtitle: 'Blue-Eyed White Kitten',
+    breed: 'White Longhair',
+    imageBadge: '🎀 Pink Yarn Sweetheart',
+    badge: 'Yarn Sweetheart',
+    badgeClass: 'badge-pearl',
+    themeColor: '#e99aaf',
+    accentColor: '#328fb7',
+    emoji: '🎀🐾',
+    tagline: 'Little Paws, Big Blue Eyes',
+    description: 'A cloud-soft white kitten with sparkling blue eyes, a tiny happy smile, and a blush-pink yarn bow. Pearl loves batting at loose yarn and padding through the garden on her fluffy little paws.',
+    quote: '"A little yarn, a little sunshine, and a whole lot of purrs!"',
+    trait: '🎀 Gentle Purr (20% Slower Mood Loss)',
+    stats: { speed: 82, cuteness: 100, farming: 88, energy: 86 },
+    bonuses: {
+      speedMult: 1.0,
+      moodDecayMult: 0.8,
+      harvestMult: 1.0,
+      weaponSpeedMult: 1.0
+    }
+  },
+
   sunny: {
     id: 'sunny',
     name: 'Sunny',

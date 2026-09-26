@@ -196,6 +196,7 @@ export class CharacterSelectManager {
     } else if (this.previewActions['Idle']) {
       this.previewActions['Idle'].play();
     }
+    this.handleResize();
   }
 
   playPreviewAnimation(animName) {
@@ -368,6 +369,17 @@ export class CharacterSelectManager {
     const width = this.viewportEl.clientWidth || 340;
     const height = this.viewportEl.clientHeight || 360;
     this.turntableCamera.aspect = width / height;
+    this.turntableCamera.position.set(0, 1.05, 3.2);
+    this.turntableCamera.lookAt(0, 0.75, 0);
+    if (this.selectedId === 'pearl' && this.previewCat) {
+      const bounds = new THREE.Box3().setFromObject(this.previewCat);
+      const size = bounds.getSize(new THREE.Vector3());
+      const center = bounds.getCenter(new THREE.Vector3());
+      const halfFov = THREE.MathUtils.degToRad(this.turntableCamera.fov / 2);
+      const distance = Math.max(size.y, size.x / this.turntableCamera.aspect) / (2 * Math.tan(halfFov));
+      this.turntableCamera.position.set(0, center.y + 0.08, distance * 1.18 + size.z / 2);
+      this.turntableCamera.lookAt(0, center.y, 0);
+    }
     this.turntableCamera.updateProjectionMatrix();
     this.turntableRenderer.setSize(width, height);
   }

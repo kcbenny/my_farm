@@ -17,6 +17,7 @@ import { CharacterSelectManager } from './ui/CharacterSelectManager.js';
 import { LivestockSystem } from './world/LivestockSystem.js';
 import { GLTFExportManager } from './gameplay/GLTFExportManager.js';
 import { normalizeAsset } from './gameplay/WorldPhysics.js';
+import { SecretFishingSpot } from './world/SecretFishingSpot.js';
 
 class FarmGame {
   constructor() {
@@ -43,8 +44,8 @@ class FarmGame {
   initEngine() {
     // 1. Scene
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x89c2d9);
-    this.scene.fog = new THREE.FogExp2(0x89c2d9, 0.015);
+    this.scene.background = new THREE.Color(0x78b5e7);
+    this.scene.fog = new THREE.FogExp2(0x78b5e7, 0.0032);
 
     // 2. Camera
     this.camera = new THREE.PerspectiveCamera(
@@ -90,6 +91,7 @@ class FarmGame {
 
     const getTerrainHeight = (x, z) => this.farm.physics.surfaceAt(x, z)?.height ?? this.farm.getTerrainHeight(x, z);
     const resolveCollision = (pos, radius) => this.farm.resolveCollision(pos, radius);
+    this.secretFishingSpot = new SecretFishingSpot(this.scene, getTerrainHeight);
 
     // Determine active character (default to Cozy low-poly kitty)
     let initialCharId = 'cozy';
@@ -375,11 +377,20 @@ class FarmGame {
     }
     if (this.cat.currentActionName === 'Action' || this.cat.currentActionName === 'Gather') return;
 
+    if (this.secretFishingSpot.isNearFarmPortal(this.controller.position)) {
+      this.travelToFishingSpot();
+      return;
+    }
+    if (this.secretFishingSpot.isNearReturnPortal(this.controller.position)) {
+      this.returnToFarm();
+      return;
+    }
+
     // 1. Check Harvestable Ripe Crop
     const nearestCrop = this.cropSystem.getNearestHarvestableCrop(this.controller.position);
     if (nearestCrop) {
       this.cat.triggerGather(() => {
-        const reward = this.cropSystem.harvestCrop(nearestCrop);
+        const reward = this.cropSystem.harvestCrop(nearestCrop, this.cat.mesh);
         if (reward) {
           let gainedCoins = reward.coins;
           let gainedDiamonds = reward.diamonds || 0;
@@ -455,7 +466,34 @@ class FarmGame {
       }
     }
 
-    this.ui.showToast('🌱 Stand closer to a ripe crop, empty plot, 3D Shop stall, or Kitty Home site!');
+    this.ui.showToast('🌱 Stand closer to a crop, shop, kitty home, or magical portal!');
+  }
+
+  teleportPlayer(position) {
+    const pivotOffset = this.cat.mesh.userData.playerPivotOffset || 0;
+    const surface = this.farm.physics.surfaceAt(position.x, position.z);
+    this.controller.position.copy(position);
+    this.controller.position.y = (surface?.height ?? this.farm.getTerrainHeight(position.x, position.z)) + pivotOffset;
+    this.controller.jumpOffset = 0;
+    this.controller.verticalVelocity = 0;
+    this.controller.isGrounded = true;
+    this.cat.mesh.position.copy(this.controller.position);
+  }
+
+  travelToFishingSpot() {
+    this.teleportPlayer(this.secretFishingSpot.getFishingArrival());
+    this.mapSystem?.setDestination('secretPond');
+    this.ui.showToast('✨ The forest portal carries you to the Secret Fishing Spot. Press [E] by a portal to return.');
+  }
+
+  returnToFarm() {
+    this.teleportPlayer(this.secretFishingSpot.getFarmArrival());
+    this.mapSystem?.setDestination('shop');
+    this.ui.showToast('✨ You return to the cozy farm.');
+  }
+
+  isAtSecretFishingSpot() {
+    return this.controller.position.distanceToSquared(this.secretFishingSpot.spotPosition) < 260;
   }
 
   confirmHomePlacement() {
@@ -496,18 +534,19 @@ class FarmGame {
       this.kittyHome.update(delta, this.controller.position);
     }
 
-    // Update Map System (Minimap & 3D Waypoint Path Navigation)
-    if (this.mapSystem) {
-      const facingAngle = this.cat ? this.cat.mesh.rotation.y : 0;
-      this.mapSystem.update(delta, this.controller.position, facingAngle);
-    }
-
     // Update Farm Ambient Animations
     this.farm.update(delta);
+    this.secretFishingSpot.update(delta);
 
     this.farm.physics.update();
     this.playerPhysics.updatePlayerPhysics(delta);
     this.kittyHome.updatePlacement(this.camera, document.pointerLockElement ? new THREE.Vector2() : this.placementPointer);
+
+    // Render after movement so the map arrow uses the cat's actual world-facing direction.
+    if (this.mapSystem) {
+      const facingAngle = this.cat ? this.cat.mesh.rotation.y : 0;
+      this.mapSystem.update(delta, this.controller.position, facingAngle);
+    }
 
     // Update Livestock Animations & AI
     if (this.livestock) {

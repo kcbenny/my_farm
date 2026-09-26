@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { MeshSurfaceSampler } from 'three/addons/math/MeshSurfaceSampler.js';
 
 /**
  * Procedural 3D Cartoon Cat Model Generator
@@ -13,6 +14,119 @@ export class CatModelBuilder {
   constructor(characterType = 'cozy') {
     this.characterType = characterType;
     this.materials = this.createMaterials(characterType);
+    if (characterType === 'pearl') this.preparePearlFur();
+  }
+
+  preparePearlFur() {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 256;
+    const context = canvas.getContext('2d');
+    context.fillStyle = '#808080';
+    context.fillRect(0, 0, 256, 256);
+    const random = () => THREE.MathUtils.seededRandom();
+    THREE.MathUtils.seededRandom(731);
+    for (let strand = 0; strand < 5000; strand++) {
+      const horizontal = random() * 256;
+      const vertical = random() * 256;
+      const shade = Math.floor(95 + random() * 65);
+      context.strokeStyle = `rgb(${shade}, ${shade}, ${shade})`;
+      context.lineWidth = 0.5 + random() * 0.6;
+      context.beginPath();
+      context.moveTo(horizontal, vertical);
+      context.quadraticCurveTo(horizontal + 1, vertical + 4, horizontal + 2, vertical + 8);
+      context.stroke();
+    }
+    const bump = new THREE.CanvasTexture(canvas);
+    bump.wrapS = bump.wrapT = THREE.RepeatWrapping;
+    bump.repeat.set(3, 3);
+    for (const name of ['fur', 'bellyWhite', 'paws', 'fluffTuft']) {
+      this.materials[name].bumpMap = bump;
+      this.materials[name].bumpScale = 0.006;
+      this.materials[name].roughness = 0.96;
+      this.materials[name].metalness = 0;
+    }
+    this.materials.fur.map = null;
+    this.materials.eyes = new THREE.MeshPhysicalMaterial({
+      map: this.materials.eyes.map,
+      roughness: 0.19,
+      metalness: 0,
+      clearcoat: 1,
+      clearcoatRoughness: 0.06
+    });
+    this.materials.furStrands = new THREE.MeshPhysicalMaterial({
+      color: 0xfffdf9,
+      vertexColors: true,
+      roughness: 0.95,
+      sheen: 1,
+      sheenColor: new THREE.Color(0xffffff),
+      sheenRoughness: 0.8,
+      side: THREE.DoubleSide
+    });
+  }
+
+  addPearlFur(root) {
+    const surfaces = [];
+    const furMaterials = ['fur', 'bellyWhite', 'paws', 'fluffTuft'].map(name => this.materials[name]);
+    root.traverse(object => {
+      if (object.isMesh && furMaterials.includes(object.material)) surfaces.push(object);
+    });
+    THREE.MathUtils.seededRandom(917);
+    const random = () => THREE.MathUtils.seededRandom();
+    for (const surface of surfaces) {
+      surface.geometry.computeBoundingSphere();
+      const radius = surface.geometry.boundingSphere.radius;
+      const count = Math.min(6500, Math.max(180, Math.round(radius * radius * 21000)));
+      const sampler = new MeshSurfaceSampler(surface).setRandomGenerator(random).build();
+      const positions = [];
+      const normals = [];
+      const colors = [];
+      const indices = [];
+      const point = new THREE.Vector3();
+      const normal = new THREE.Vector3();
+      const comb = new THREE.Vector3();
+      const sideways = new THREE.Vector3();
+      const center = new THREE.Vector3();
+      const isHead = surface.name === 'Head_Mesh';
+      for (let strand = 0; strand < count; strand++) {
+        sampler.sample(point, normal);
+        const isFace = isHead && point.z > 0.28 && Math.abs(point.x) < 0.43;
+        const length = (isFace ? 0.014 : Math.min(0.085, radius * 0.25)) * (0.5 + random());
+        const width = 0.0015 + random() * 0.0015;
+        comb.set(normal.x * 0.35, -1, normal.z * 0.12);
+        comb.addScaledVector(normal, -comb.dot(normal)).normalize();
+        if (comb.lengthSq() < 0.01) comb.set(1, 0, 0);
+        sideways.crossVectors(normal, comb).normalize();
+        const bend = (random() - 0.5) * length * 0.35;
+        const shade = 0.78 + random() * 0.15;
+        const base = positions.length / 3;
+        for (let segment = 0; segment <= 3; segment++) {
+          const progress = segment / 3;
+          center.copy(point).addScaledVector(normal, 0.001 + length * progress * (1 - progress * 0.38));
+          center.addScaledVector(comb, length * progress * progress * 0.65);
+          center.addScaledVector(sideways, bend * progress * progress);
+          for (const side of [-1, 1]) {
+            const spread = side * width * (1 - progress * 0.97);
+            positions.push(center.x + sideways.x * spread, center.y + sideways.y * spread, center.z + sideways.z * spread);
+            normals.push(normal.x, normal.y, normal.z);
+            const brightness = shade + (1 - shade) * progress;
+            colors.push(brightness, brightness, brightness);
+          }
+          if (segment < 3) {
+            const vertex = base + segment * 2;
+            indices.push(vertex, vertex + 1, vertex + 2, vertex + 1, vertex + 3, vertex + 2);
+          }
+        }
+      }
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+      geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      geometry.setIndex(indices);
+      const fur = new THREE.Mesh(geometry, this.materials.furStrands);
+      fur.name = 'Pearl_Fur_Strands';
+      fur.userData.isFur = true;
+      surface.add(fur);
+    }
   }
 
   createFurTexture(characterType = 'cozy') {
@@ -48,7 +162,7 @@ export class CatModelBuilder {
       ctx.ellipse(256, 170, 135, 110, 0, 0, Math.PI * 2);
       ctx.fill();
 
-    } else if (characterType === 'snowball') {
+    } else if (characterType === 'snowball' || characterType === 'pearl') {
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, 512, 512);
 
@@ -339,7 +453,41 @@ export class CatModelBuilder {
     canvas.height = 256;
     const ctx = canvas.getContext('2d');
 
-    if (characterType === 'mochi') {
+    if (characterType === 'pearl') {
+      ctx.fillStyle = '#102936';
+      ctx.fillRect(0, 0, 256, 256);
+      const iris = ctx.createRadialGradient(128, 110, 36, 128, 128, 124);
+      iris.addColorStop(0, '#123c55');
+      iris.addColorStop(0.6, '#318bb5');
+      iris.addColorStop(0.85, '#89d8ed');
+      iris.addColorStop(1, '#173c52');
+      ctx.fillStyle = iris;
+      ctx.beginPath();
+      ctx.arc(128, 128, 120, 0, Math.PI * 2);
+      ctx.fill();
+      for (let fiber = 0; fiber < 240; fiber++) {
+        const angle = fiber * Math.PI * 2 / 240;
+        const innerRadius = 74 + Math.sin(fiber * 7.3) * 8;
+        const outerRadius = 113 + Math.sin(fiber * 3.7) * 4;
+        ctx.strokeStyle = fiber % 3 === 0 ? 'rgba(163, 221, 235, 0.55)' : 'rgba(18, 62, 87, 0.45)';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(128 + Math.cos(angle) * innerRadius, 128 + Math.sin(angle) * innerRadius);
+        ctx.lineTo(128 + Math.cos(angle + 0.025) * outerRadius, 128 + Math.sin(angle + 0.025) * outerRadius);
+        ctx.stroke();
+      }
+      ctx.fillStyle = '#04111b';
+      ctx.beginPath();
+      ctx.ellipse(128, 111, 78, 86, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(83, 65, 13, 20, -0.45, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(172, 158, 6, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (characterType === 'mochi') {
       ctx.fillStyle = '#f8f1e5';
       ctx.fillRect(0, 0, 256, 256);
 
@@ -556,7 +704,7 @@ export class CatModelBuilder {
       noseColor = 0x382015;
       innerEarColor = 0x6d4c41;
       pawColor = 0x4a2e20;
-    } else if (characterType === 'snowball') {
+    } else if (characterType === 'snowball' || characterType === 'pearl') {
       bellyColor = 0xffffff;
       darkAccentColor = 0xe2e8f0;
       noseColor = 0xffa6c1;
@@ -704,8 +852,8 @@ export class CatModelBuilder {
         flatShading: false,
       }),
       ribbonCollar: new THREE.MeshStandardMaterial({
-        color: ribbonColor,
-        roughness: 0.55,
+        color: characterType === 'pearl' ? 0xeaa4b6 : ribbonColor,
+        roughness: characterType === 'pearl' ? 0.95 : 0.55,
         flatShading: false,
       }),
 
@@ -763,10 +911,47 @@ export class CatModelBuilder {
     };
   }
 
+  addPearlDetails(headBone) {
+    const yarn = new THREE.Group();
+    yarn.name = 'Pearl_Yarn_Bow';
+    const addCord = (points, radius = 0.016) => {
+      const curve = new THREE.CatmullRomCurve3(points.map(point => new THREE.Vector3(...point)));
+      for (let strand = 0; strand < 3; strand++) {
+        const strandPoints = [];
+        for (let step = 0; step <= 96; step++) {
+          const progress = step / 96;
+          const point = curve.getPoint(progress);
+          const tangent = curve.getTangent(progress);
+          const normal = new THREE.Vector3(0, 0, 1).cross(tangent).normalize();
+          const binormal = tangent.clone().cross(normal).normalize();
+          const angle = progress * Math.PI * 32 + strand * Math.PI * 2 / 3;
+          point.addScaledVector(normal, Math.cos(angle) * radius * 0.5);
+          point.addScaledVector(binormal, Math.sin(angle) * radius * 0.5);
+          strandPoints.push(point);
+        }
+        const geometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(strandPoints), 96, radius * 0.55, 5, false);
+        yarn.add(new THREE.Mesh(geometry, this.materials.ribbonCollar));
+      }
+    };
+    addCord([[-0.57, -0.23, 0.15], [-0.52, 0.13, 0.25], [-0.34, 0.4, 0.28], [0, 0.49, 0.23], [0.34, 0.4, 0.28], [0.52, 0.13, 0.25], [0.57, -0.23, 0.15]]);
+    for (const side of [-1, 1]) {
+      addCord([[0, 0.5, 0.25], [side * 0.16, 0.67, 0.23], [side * 0.3, 0.66, 0.2], [side * 0.25, 0.53, 0.27], [0, 0.5, 0.25]], 0.023);
+      addCord([[side * 0.025, 0.52, 0.27], [side * 0.13, 0.45, 0.36], [side * 0.22, 0.32, 0.4]], 0.018);
+    }
+    const knot = new THREE.Mesh(new THREE.SphereGeometry(0.045, 16, 12), this.materials.ribbonCollar);
+    knot.position.set(0, 0.52, 0.26);
+    knot.scale.set(0.8, 1.2, 0.85);
+    yarn.add(knot);
+    headBone.add(yarn);
+
+  }
+
   buildCatModel(characterType = this.characterType || 'cozy') {
     const root = new THREE.Group();
     root.name = 'Cat_Root';
     const isCozy = characterType === 'cozy';
+    const isPearl = characterType === 'pearl';
+    const isFluffy = characterType === 'snowball' || isPearl;
 
     // Base Pelvis Node
     const pelvis = new THREE.Group();
@@ -806,7 +991,7 @@ export class CatModelBuilder {
     spine.add(bellyPatchMesh);
 
     // Extra Fluffy Chest Ruff for Snowball (Persian Fur Cravat)
-    if (characterType === 'snowball') {
+    if (isFluffy) {
       const ruffGroup = new THREE.Group();
       ruffGroup.name = 'Chest_Ruff';
       ruffGroup.position.set(0, 0.12, 0.36);
@@ -934,6 +1119,7 @@ export class CatModelBuilder {
     headMesh.receiveShadow = true;
     headMesh.name = 'Head_Mesh';
     headBone.add(headMesh);
+    if (isPearl) this.addPearlDetails(headBone);
 
     // Chubby Cheeks
     const cheekGeom = new THREE.SphereGeometry(0.22, isCozy ? 8 : 24, isCozy ? 6 : 20);
@@ -977,10 +1163,11 @@ export class CatModelBuilder {
     // Snout / Muzzle & Mouth
     const muzzleMat = (characterType === 'mochi') ? this.materials.darkAccent : this.materials.bellyWhite;
 
-    if (characterType === 'sunny') {
+    if (characterType === 'sunny' || isPearl) {
       // 1. Sunny: Distinctive Open Meowing / Singing Mouth (Image 1)
       const muzzleGroup = new THREE.Group();
-      muzzleGroup.position.set(0, -0.08, 0.4);
+      muzzleGroup.position.set(0, -0.08, isPearl ? 0.52 : 0.4);
+      if (isPearl) muzzleGroup.scale.set(1.05, 0.8, 0.85);
 
       // Upper muzzle lobes (left & right cheek pads)
       const lobeGeom = new THREE.SphereGeometry(0.11, 20, 16);
@@ -1012,6 +1199,7 @@ export class CatModelBuilder {
       const tongueMesh = new THREE.Mesh(tongueGeom, this.materials.tongue);
       tongueMesh.position.set(0, -0.09, 0.04);
       tongueMesh.rotation.x = 0.3;
+      if (isPearl) tongueMesh.scale.set(0.72, 0.65, 0.6);
       muzzleGroup.add(tongueMesh);
 
       // Tiny cute kitten fangs
@@ -1085,17 +1273,27 @@ export class CatModelBuilder {
     }
 
     // Smooth rounded button Nose
-    const noseGeom = new THREE.SphereGeometry(isCozy ? 0.045 : 0.065, isCozy ? 8 : 20, isCozy ? 6 : 16);
+    let noseGeom;
+    if (isPearl) {
+      const shape = new THREE.Shape();
+      shape.moveTo(-0.048, 0.018);
+      shape.quadraticCurveTo(0, 0.031, 0.048, 0.018);
+      shape.quadraticCurveTo(0.038, -0.004, 0, -0.035);
+      shape.quadraticCurveTo(-0.038, -0.004, -0.048, 0.018);
+      noseGeom = new THREE.ExtrudeGeometry(shape, { depth: 0.016, bevelEnabled: true, bevelSegments: 3, steps: 1, bevelSize: 0.006, bevelThickness: 0.006, curveSegments: 12 });
+    } else {
+      noseGeom = new THREE.SphereGeometry(isCozy ? 0.045 : 0.065, isCozy ? 8 : 20, isCozy ? 6 : 16);
+    }
     noseGeom.scale(1.15, 0.8, 0.7);
     noseGeom.computeVertexNormals();
     const noseMesh = new THREE.Mesh(noseGeom, this.materials.pinkNose);
-    noseMesh.position.set(0, isCozy ? -0.02 : -0.035, 0.51);
+    noseMesh.position.set(0, isCozy ? -0.02 : -0.035, isPearl ? 0.64 : 0.51);
     headBone.add(noseMesh);
 
     // Whiskers
     const whiskerColor = (characterType === 'mochi') ? 0x4a2e20 : 0xffffff;
     const whiskerMat = new THREE.MeshBasicMaterial({ color: whiskerColor });
-    const whiskerGeom = new THREE.CylinderGeometry(0.008, 0.008, 0.32, 8);
+    const whiskerGeom = new THREE.CylinderGeometry(isPearl ? 0.0008 : 0.008, isPearl ? 0.002 : 0.008, isPearl ? 0.43 : 0.32, 8);
     whiskerGeom.rotateZ(Math.PI / 2);
     whiskerGeom.computeVertexNormals();
 
@@ -1110,21 +1308,41 @@ export class CatModelBuilder {
     }
 
     // Eyes - Smooth high-res spheres
-    const eyeGeom = new THREE.SphereGeometry(0.15, isCozy ? 10 : 28, isCozy ? 8 : 24);
-    eyeGeom.scale(1.0, isCozy ? 1.24 : 1.25, isCozy ? 0.62 : 0.6);
+    const eyeGeom = isPearl
+      ? new THREE.SphereGeometry(0.17, 48, 24, 0, Math.PI * 2, 0, Math.PI / 2)
+      : new THREE.SphereGeometry(0.15, isCozy ? 10 : 28, isCozy ? 8 : 24);
+    if (isPearl) {
+      eyeGeom.rotateX(Math.PI / 2);
+      const vertices = eyeGeom.attributes.position;
+      const uv = eyeGeom.attributes.uv;
+      for (let vertex = 0; vertex < vertices.count; vertex++) {
+        uv.setXY(vertex, vertices.getX(vertex) / 0.34 + 0.5, vertices.getY(vertex) / 0.34 + 0.5);
+      }
+    }
+    eyeGeom.scale(1.0, isPearl ? 1.1 : (isCozy ? 1.24 : 1.25), isCozy ? 0.62 : 0.6);
     eyeGeom.computeVertexNormals();
 
     const eyeL = new THREE.Mesh(eyeGeom, this.materials.eyes);
-    eyeL.position.set(-0.23, isCozy ? 0.08 : 0.06, 0.45);
+    eyeL.position.set(-0.23, isPearl ? 0.09 : (isCozy ? 0.08 : 0.06), isPearl ? 0.515 : 0.45);
     eyeL.rotation.y = -0.18;
     eyeL.rotation.x = 0.05;
     headBone.add(eyeL);
 
     const eyeR = new THREE.Mesh(eyeGeom, this.materials.eyes);
-    eyeR.position.set(0.23, isCozy ? 0.08 : 0.06, 0.45);
+    eyeR.position.set(0.23, isPearl ? 0.09 : (isCozy ? 0.08 : 0.06), isPearl ? 0.515 : 0.45);
     eyeR.rotation.y = 0.18;
     eyeR.rotation.x = 0.05;
     headBone.add(eyeR);
+
+    if (isPearl) {
+      const rimMaterial = new THREE.MeshStandardMaterial({ color: 0x403539, roughness: 0.65 });
+      const rimGeometry = new THREE.TorusGeometry(0.171, 0.008, 8, 48);
+      for (const eye of [eyeL, eyeR]) {
+        const rim = new THREE.Mesh(rimGeometry, rimMaterial);
+        rim.scale.y = 1.1;
+        eye.add(rim);
+      }
+    }
 
     // Ears - Smooth cone with 24 radial segments
     const earGeom = new THREE.ConeGeometry(0.16, 0.22, isCozy ? 10 : 24);
@@ -1137,7 +1355,8 @@ export class CatModelBuilder {
     earL.name = 'Ear_L';
     const earRotZ = (characterType === 'mochi') ? 0.55 : (isCozy ? 0.12 : 0.4);
     const earRotX = (characterType === 'mochi') ? -0.2 : (isCozy ? -0.18 : -0.1);
-    earL.position.set(-0.27, isCozy ? 0.3 : 0.38, 0.02);
+    earL.position.set(isPearl ? -0.37 : -0.27, isCozy ? 0.3 : 0.38, 0.02);
+    if (isPearl) earL.scale.set(1.25, 1.55, 1.15);
     earL.rotation.set(earRotX, 0.15, earRotZ);
     const earLMesh = new THREE.Mesh(earGeom, earFurMat);
     earLMesh.castShadow = true;
@@ -1151,7 +1370,7 @@ export class CatModelBuilder {
     earL.add(innerEarLMesh);
 
     // Fluffy ear hair tufts for Snowball
-    if (characterType === 'snowball') {
+    if (isFluffy) {
       const earTuftGeom = new THREE.ConeGeometry(0.06, 0.16, 16);
       earTuftGeom.scale(1.0, 1.0, 0.3);
       earTuftGeom.computeVertexNormals();
@@ -1163,7 +1382,8 @@ export class CatModelBuilder {
 
     const earR = new THREE.Group();
     earR.name = 'Ear_R';
-    earR.position.set(0.27, isCozy ? 0.3 : 0.38, 0.02);
+    earR.position.set(isPearl ? 0.37 : 0.27, isCozy ? 0.3 : 0.38, 0.02);
+    if (isPearl) earR.scale.set(1.25, 1.55, 1.15);
     earR.rotation.set(earRotX, -0.15, -earRotZ);
     const earRMesh = new THREE.Mesh(earGeom, earFurMat);
     earRMesh.castShadow = true;
@@ -1173,7 +1393,7 @@ export class CatModelBuilder {
     innerEarRMesh.position.set(0, -0.02, 0.06);
     earR.add(innerEarRMesh);
 
-    if (characterType === 'snowball') {
+    if (isFluffy) {
       const earTuftGeom = new THREE.ConeGeometry(0.06, 0.16, 16);
       earTuftGeom.scale(1.0, 1.0, 0.3);
       earTuftGeom.computeVertexNormals();
@@ -1406,7 +1626,7 @@ export class CatModelBuilder {
     tail2.position.set(0, 0.2, -0.08);
     tail1.add(tail2);
 
-    const tail2Mat = isCozy ? this.materials.darkAccent : (characterType === 'mochi' ? this.materials.darkAccent : ((characterType === 'snowball') ? this.materials.fur : this.materials.darkAccent));
+    const tail2Mat = isCozy ? this.materials.darkAccent : (characterType === 'mochi' ? this.materials.darkAccent : (isFluffy ? this.materials.fur : this.materials.darkAccent));
     const tail2Mesh = new THREE.Mesh(tailSegGeom, tail2Mat);
     tail2Mesh.position.set(isCozy ? 0.04 : 0, 0.09, 0);
     tail2Mesh.rotation.x = 0.2;
@@ -1419,7 +1639,7 @@ export class CatModelBuilder {
     tail2.add(tail3);
 
     // Tail tip: Snowball gets extra fluffy plume puff, Mochi gets chocolate tip
-    const tipRadius = (characterType === 'snowball') ? 0.13 : (isCozy ? 0.09 : 0.085);
+    const tipRadius = isFluffy ? 0.13 : (isCozy ? 0.09 : 0.085);
     const tailTipGeom = new THREE.SphereGeometry(tipRadius, isCozy ? 8 : 24, isCozy ? 6 : 20);
     tailTipGeom.computeVertexNormals();
     const tail3Mat = isCozy ? this.materials.bellyWhite : (characterType === 'mochi') ? this.materials.darkAccent : this.materials.bellyWhite;
@@ -1428,10 +1648,12 @@ export class CatModelBuilder {
     tail3Mesh.castShadow = true;
     tail3.add(tail3Mesh);
 
+    if (isPearl) this.addPearlFur(root);
+
     // Pre-calculate shadow casting and bounds
     root.traverse(child => {
       if (child.isMesh) {
-        child.castShadow = true;
+        child.castShadow = !child.userData.isFur;
         child.receiveShadow = true;
       }
     });

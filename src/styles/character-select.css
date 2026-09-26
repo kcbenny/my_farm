@@ -267,6 +267,7 @@
   letter-spacing: 0.5px;
 }
 
+.badge-pearl { background: #fce7ee; color: #9d3658; border: 1px solid #e99aaf; }
 .badge-sunny { background: #ffedd5; color: #c2410c; border: 1px solid #fdba74; }
 .badge-mochi { background: #f5ebe0; color: #5c4033; border: 1px solid #d5bdaf; }
 .badge-snowball { background: #d1fae5; color: #047857; border: 1px solid #6ee7b7; }

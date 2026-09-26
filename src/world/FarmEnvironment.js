@@ -5,6 +5,7 @@ import { PondModel } from './PondModel.js';
 import { ShopStallModel } from './ShopStallModel.js';
 import { CozySceneModels } from './CozySceneModels.js';
 import { ModularTileSystem } from './ModularTileSystem.js';
+import { TreeModelBuilder } from './TreeModelBuilder.js';
 import { WorldPhysics, normalizeAsset } from '../gameplay/WorldPhysics.js';
 
 export class FarmEnvironment {
@@ -197,36 +198,132 @@ export class FarmEnvironment {
       y += (t * t * (3 - 2 * t)) * 1.3; // Stepped garden slope to +1.3m
     }
 
-    // 6. Outer Border Rolling Hills
-    if (z < -18) {
-      y += Math.pow(Math.abs(z + 18) * 0.22, 1.3);
+    const hills = [
+      [-29, -35, 5.8, 20, 17], [2, -37, 4.5, 19, 16],
+      [33, -30, 6.2, 20, 19], [38, 6, 4.8, 17, 23],
+      [-38, 0, 4.2, 17, 20], [-25, 34, 3.4, 22, 17],
+      [14, 36, 4.2, 24, 17], [-38, -66, 12, 38, 27],
+      [38, -63, 10, 35, 25], [-69, 5, 9, 24, 44],
+      [69, 10, 8, 26, 39], [6, 69, 7, 55, 25]
+    ];
+    for (const [centerX, centerZ, height, radiusX, radiusZ] of hills) {
+      const distance = Math.hypot((x - centerX) / radiusX, (z - centerZ) / radiusZ);
+      const influence = Math.max(0, 1 - distance);
+      y += influence * influence * (3 - 2 * influence) * height;
     }
-    if (z > 22) {
-      y += Math.pow((z - 22) * 0.2, 1.3);
-    }
-    if (Math.abs(x) > 26) {
-      y += Math.pow((Math.abs(x) - 26) * 0.24, 1.35);
+    const peaks = [
+      [-42, -82, 34, 29, 26], [4, -95, 23, 29, 23],
+      [49, -77, 29, 31, 27], [-85, -31, 23, 25, 32],
+      [86, -15, 21, 27, 34], [-63, 65, 17, 30, 28],
+      [48, 82, 19, 35, 26]
+    ];
+    for (const [centerX, centerZ, height, radiusX, radiusZ] of peaks) {
+      const distance = Math.hypot((x - centerX) / radiusX, (z - centerZ) / radiusZ);
+      y += Math.pow(Math.max(0, 1 - distance), 1.15) * height;
     }
 
     return y;
   }
 
-  createTerrain() {
-    const size = 96;
-    const segments = 80;
-    const geom = new THREE.PlaneGeometry(size, size, segments, segments);
-    geom.rotateX(-Math.PI / 2);
-
-    const pos = geom.attributes.position;
-    for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i);
-      const z = pos.getZ(i);
-      const y = this.getTerrainHeight(x, z);
-      pos.setY(i, y);
+  createTerrainGeometry(coordinates, backdrop = false) {
+    const positions = [];
+    const colors = [];
+    const meadow = new THREE.Color(0x76ad42);
+    const hillside = new THREE.Color(0x87b957);
+    const rock = new THREE.Color(0x837f6a);
+    const summit = new THREE.Color(0xbab6a2);
+    const normal = new THREE.Vector3();
+    const edge = new THREE.Vector3();
+    const color = new THREE.Color();
+    const addFace = (first, second, third) => {
+      normal.subVectors(second, first).cross(edge.subVectors(third, first)).normalize();
+      const height = (first.y + second.y + third.y) / 3;
+      const centerX = (first.x + second.x + third.x) / 3;
+      const centerZ = (first.z + second.z + third.z) / 3;
+      const variation = Math.sin(centerX * 12.9898 + centerZ * 78.233) * 43758.5453;
+      const noise = variation - Math.floor(variation);
+      color.copy(meadow).lerp(hillside, THREE.MathUtils.clamp(height / 12, 0, 1));
+      if (backdrop) {
+        const rockLine = 10 + Math.sin(centerX * 0.19 + centerZ * 0.13) * 2.5;
+        const rocky = THREE.MathUtils.smoothstep(height, rockLine, rockLine + 5);
+        color.lerp(rock, rocky);
+        color.lerp(summit, THREE.MathUtils.smoothstep(height, 25, 38) * 0.75);
+      }
+      color.multiplyScalar(0.9 + noise * 0.18 + normal.x * 0.035);
+      for (const vertex of [first, second, third]) {
+        positions.push(vertex.x, vertex.y, vertex.z);
+        colors.push(color.r, color.g, color.b);
+      }
+    };
+    for (let row = 0; row < coordinates.length - 1; row++) {
+      for (let column = 0; column < coordinates.length - 1; column++) {
+        const left = coordinates[column];
+        const right = coordinates[column + 1];
+        const near = coordinates[row];
+        const far = coordinates[row + 1];
+        if (backdrop && left >= -48 && right <= 48 && near >= -48 && far <= 48) continue;
+        const cornerA = new THREE.Vector3(left, this.getTerrainHeight(left, near), near);
+        const cornerB = new THREE.Vector3(right, this.getTerrainHeight(right, near), near);
+        const cornerC = new THREE.Vector3(left, this.getTerrainHeight(left, far), far);
+        const cornerD = new THREE.Vector3(right, this.getTerrainHeight(right, far), far);
+        const borderCell = backdrop && (
+          ((right === -48 || left === 48) && near >= -48 && far <= 48) ||
+          ((far === -48 || near === 48) && left >= -48 && right <= 48)
+        );
+        if (borderCell) {
+          const corners = [cornerA, cornerC, cornerD, cornerB];
+          const perimeter = [];
+          for (let side = 0; side < corners.length; side++) {
+            const start = corners[side];
+            const end = corners[(side + 1) % corners.length];
+            perimeter.push(start);
+            const vertical = start.x === end.x && Math.abs(start.x) === 48;
+            const horizontal = start.z === end.z && Math.abs(start.z) === 48;
+            if (!vertical && !horizontal) continue;
+            const from = vertical ? start.z : start.x;
+            const to = vertical ? end.z : end.x;
+            const samples = this.terrainCoordinates.filter(value => value > Math.min(from, to) && value < Math.max(from, to));
+            if (from > to) samples.reverse();
+            for (const sample of samples) {
+              const positionX = vertical ? start.x : sample;
+              const positionZ = vertical ? sample : start.z;
+              perimeter.push(new THREE.Vector3(positionX, this.getTerrainHeight(positionX, positionZ), positionZ));
+            }
+          }
+          const centerX = (left + right) / 2;
+          const centerZ = (near + far) / 2;
+          const center = new THREE.Vector3(centerX, this.getTerrainHeight(centerX, centerZ), centerZ);
+          perimeter.forEach((point, index) => addFace(center, point, perimeter[(index + 1) % perimeter.length]));
+          continue;
+        }
+        if ((row + column) % 2 === 0) {
+          addFace(cornerA, cornerC, cornerB);
+          addFace(cornerB, cornerC, cornerD);
+        } else {
+          addFace(cornerA, cornerC, cornerD);
+          addFace(cornerA, cornerD, cornerB);
+        }
+      }
     }
-    geom.computeVertexNormals();
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geometry.computeVertexNormals();
+    return geometry;
+  }
 
-    const terrain = new THREE.Mesh(geom, this.materials.grass);
+  createTerrain() {
+    const coordinates = Array.from({ length: 49 }, (_, index) => {
+      const offset = index - 24;
+      return Math.sign(offset) * (Math.abs(offset) <= 16 ? Math.abs(offset) * 1.5 : 24 + (Math.abs(offset) - 16) * 3);
+    });
+    this.terrainCoordinates = coordinates;
+    const material = new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      roughness: 1,
+      flatShading: true
+    });
+    const terrain = new THREE.Mesh(this.createTerrainGeometry(coordinates), material);
     terrain.receiveShadow = true;
     terrain.name = 'Terrain_Ground';
     terrain.userData.isTerrain = true;
@@ -234,6 +331,15 @@ export class FarmEnvironment {
     this.scene.add(terrain);
     this.terrainMesh = terrain;
     this.registerCollidableObject(terrain, 'terrain');
+
+    const outer = [-144, -128, -112, -100, -92, -84, -76, -68, -60, -54];
+    const backdropCoordinates = [...outer, -48, -39, -30, -24, -16.5, -9, 0, 9, 16.5, 24, 30, 39, 48, ...outer.map(value => -value).reverse()];
+    const mountains = new THREE.Mesh(this.createTerrainGeometry(backdropCoordinates, true), material);
+    mountains.name = 'Faceted_Mountain_Backdrop';
+    mountains.userData.physics = false;
+    mountains.receiveShadow = true;
+    this.scene.add(mountains);
+    this.mountainMesh = mountains;
   }
 
   createWindingPath() {
@@ -354,21 +460,21 @@ export class FarmEnvironment {
       { x: -22, z: -18, type: 'pine', scale: 1.4 },
       { x: -16, z: -30, type: 'oak', scale: 1.6 },
       { x: -5, z: -28, type: 'autumn', scale: 1.5 },
-      { x: 8, z: -25, type: 'oak', scale: 1.3 },
+      { x: 8, z: -25, type: 'birch', scale: 1.3 },
       { x: 18, z: -24, type: 'pine', scale: 1.5 },
       { x: 28, z: -8, type: 'apple', scale: 1.2 },
-      { x: 26, z: 12, type: 'oak', scale: 1.4 },
+      { x: 26, z: 12, type: 'blossom', scale: 1.4 },
       { x: 18, z: 22, type: 'autumn', scale: 1.3 },
-      { x: -2, z: 24, type: 'oak', scale: 1.5 },
+      { x: -2, z: 24, type: 'willow', scale: 1.5 },
       { x: -18, z: 24, type: 'pine', scale: 1.4 },
-      { x: -28, z: 8, type: 'oak', scale: 1.3 },
+      { x: -28, z: 8, type: 'birch', scale: 1.3 },
       // Near farm accent trees
       { x: -10, z: -2, type: 'apple', scale: 1.0 },
-      { x: 12, z: -12, type: 'apple', scale: 1.1 },
+      { x: 12, z: -12, type: 'blossom', scale: 1.1 },
     ];
 
-    treeLocations.forEach(loc => {
-      const tree = this.buildTree(loc.type, loc.scale);
+    treeLocations.forEach((loc, index) => {
+      const tree = this.buildTree(loc.type, loc.scale, index + 1);
       normalizeAsset(tree, 'tree', 3 + loc.scale);
       const size = new THREE.Box3().setFromObject(tree).getSize(new THREE.Vector3());
       const placement = this.physics.findPlacement(new THREE.Vector3(loc.x, 0, loc.z), size);
@@ -381,66 +487,8 @@ export class FarmEnvironment {
     });
   }
 
-  buildTree(type = 'oak', scale = 1.0) {
-    const treeGroup = new THREE.Group();
-    treeGroup.name = `${type}_Tree`;
-    // Trunk
-    const trunkGeom = new THREE.CylinderGeometry(0.3 * scale, 0.45 * scale, 2.5 * scale, 6);
-    const trunk = new THREE.Mesh(trunkGeom, this.materials.treeTrunk);
-    trunk.position.y = (1.25 * scale);
-    trunk.castShadow = true;
-    trunk.receiveShadow = true;
-    treeGroup.add(trunk);
-
-    if (type === 'pine') {
-      // Layered pine cones
-      for (let lvl = 0; lvl < 3; lvl++) {
-        const coneGeom = new THREE.ConeGeometry((2.0 - lvl * 0.45) * scale, 2.2 * scale, 6);
-        const cone = new THREE.Mesh(coneGeom, this.materials.treeFoliage);
-        cone.position.y = (2.4 + lvl * 1.3) * scale;
-        cone.castShadow = true;
-        treeGroup.add(cone);
-      }
-    } else {
-      // Fluffy rounded foliage (dodecahedrons)
-      const foliageMat = type === 'autumn' ? this.materials.treeFoliageAutumn : this.materials.treeFoliage;
-      const foliageGeom = new THREE.DodecahedronGeometry(1.8 * scale, 1);
-      const foliage = new THREE.Mesh(foliageGeom, foliageMat);
-      foliage.position.y = (3.2 * scale);
-      foliage.castShadow = true;
-      treeGroup.add(foliage);
-
-      // Extra fluffy puffs
-      const puffGeom = new THREE.DodecahedronGeometry(1.1 * scale, 1);
-      const p1 = new THREE.Mesh(puffGeom, foliageMat);
-      p1.position.set(0.7 * scale, 3.6 * scale, 0.4 * scale);
-      p1.castShadow = true;
-      treeGroup.add(p1);
-
-      const p2 = new THREE.Mesh(puffGeom, foliageMat);
-      p2.position.set(-0.6 * scale, 3.4 * scale, -0.5 * scale);
-      p2.castShadow = true;
-      treeGroup.add(p2);
-
-      // Red apples if apple tree
-      if (type === 'apple') {
-        const appleMat = new THREE.MeshStandardMaterial({ color: 0xef233c, roughness: 0.3 });
-        const appleGeom = new THREE.SphereGeometry(0.18 * scale, 6, 6);
-        for (let a = 0; a < 6; a++) {
-          const apple = new THREE.Mesh(appleGeom, appleMat);
-          const angle = (a / 6) * Math.PI * 2;
-          apple.position.set(
-            Math.cos(angle) * 1.6 * scale,
-            (3.0 + Math.sin(a) * 0.6) * scale,
-            Math.sin(angle) * 1.6 * scale
-          );
-          apple.castShadow = true;
-          treeGroup.add(apple);
-        }
-      }
-    }
-
-    return treeGroup;
+  buildTree(type = 'oak', scale = 1.0, seed = 1) {
+    return TreeModelBuilder.create(type, scale, seed);
   }
 
   createFences() {
@@ -932,8 +980,8 @@ export class FarmEnvironment {
       this.sunLight.color.setHex(0xfff3b0);
       this.sunLight.intensity = 1.8;
       this.sunLight.position.set(25, 40, 20);
-      this.scene.background = new THREE.Color(0x89c2d9);
-      this.scene.fog = new THREE.FogExp2(0x89c2d9, 0.015);
+      this.scene.background = new THREE.Color(0x78b5e7);
+      this.scene.fog = new THREE.FogExp2(0x78b5e7, 0.0032);
     } else if (preset === 'sunset') {
       this.hemiLight.color.setHex(0xffaa5e);
       this.hemiLight.groundColor.setHex(0x54473f);
@@ -973,7 +1021,12 @@ export class FarmEnvironment {
     // Subtle wind sway on tree foliage
     const time = Date.now() * 0.002;
     for (let i = 0; i < this.trees.length; i++) {
-      this.trees[i].rotation.z = Math.sin(time + i) * 0.02;
+      const tree = this.trees[i];
+      const crown = tree.getObjectByName('Tree_Crown');
+      if (crown) {
+        crown.rotation.z = Math.sin(time + tree.userData.windPhase) * 0.012;
+        crown.rotation.x = Math.cos(time * 0.7 + tree.userData.windPhase) * 0.008;
+      }
     }
 
     // Animate Campfires Flickering & Embers

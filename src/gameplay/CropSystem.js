@@ -8,6 +8,7 @@ export class CropSystem {
     this.worldPhysics = worldPhysics;
     this.crops = [];
     this.particles = [];
+    this.harvestAnimations = [];
 
     this.materials = {
       carrotOrange: new THREE.MeshStandardMaterial({ color: 0xff6b35, roughness: 0.5, flatShading: true }),
@@ -70,6 +71,7 @@ export class CropSystem {
     if (t === 'wilted') {
       return ModularCropModels.createCrop('wheat', 'wilted');
     }
+    if (stage === 'wilted') return this.createCropMesh('empty');
 
     const group = new THREE.Group();
     group.name = `Crop_${type}`;
@@ -270,15 +272,23 @@ export class CropSystem {
     return true;
   }
 
-  harvestCrop(crop) {
+  harvestCrop(crop, collector = null) {
     if (crop.stage !== 'mature' && crop.stage !== 'ripe') return null;
 
-    // Harvest crop -> turns into harvested / wilted plot!
-    this.spawnHarvestParticles(crop.position, crop.type);
-
-    this.worldPhysics?.unregister(crop.mesh);
-    this.scene.remove(crop.mesh);
-    crop.stage = 'wilted';
+    const harvestedMesh = crop.mesh;
+    this.worldPhysics?.unregister(harvestedMesh);
+    crop.stage = 'harvesting';
+    this.harvestAnimations.push({
+      crop,
+      mesh: harvestedMesh,
+      collector,
+      start: harvestedMesh.position.clone(),
+      scale: harvestedMesh.scale.clone(),
+      rotation: harvestedMesh.quaternion.clone(),
+      target: crop.position.clone().add(new THREE.Vector3(0, 0.8, 0)),
+      elapsed: 0,
+      released: false
+    });
     crop.mesh = this.createCropMesh(crop.type, 'wilted');
     crop.mesh.position.copy(crop.position);
     this.scene.add(crop.mesh);
@@ -298,6 +308,56 @@ export class CropSystem {
     };
 
     return rewards[crop.type] || { name: 'Farm Crop', emoji: '🌾', coins: 10, kittyCoins: 1, diamonds: 0 };
+  }
+
+  updateHarvestAnimations(delta) {
+    for (let index = this.harvestAnimations.length - 1; index >= 0; index--) {
+      const animation = this.harvestAnimations[index];
+      const { crop, mesh, start, scale, rotation, target, collector } = animation;
+      animation.elapsed += delta;
+      const elapsed = animation.elapsed;
+      mesh.quaternion.copy(rotation);
+      if (elapsed < 0.2) {
+        const tug = Math.sin(elapsed / 0.2 * Math.PI);
+        mesh.rotateZ(tug * 0.16);
+        mesh.scale.copy(scale).multiply(new THREE.Vector3(1 + tug * 0.06, 1 - tug * 0.12, 1 + tug * 0.06));
+      } else {
+        if (!animation.released) {
+          animation.released = true;
+          this.spawnHarvestParticles(start, crop.type);
+        }
+        const lift = Math.min(1, (elapsed - 0.2) / 0.3);
+        if (elapsed < 0.5) {
+          mesh.position.copy(start);
+          mesh.position.y += (1 - (1 - lift) ** 3) * 0.8;
+          mesh.scale.copy(scale).multiplyScalar(1 - lift * 0.2);
+          mesh.rotateZ(Math.sin(lift * Math.PI) * -0.12);
+        } else {
+          const progress = Math.min(1, (elapsed - 0.5) / 0.7);
+          const eased = progress * progress * (3 - 2 * progress);
+          if (collector) {
+            collector.getWorldPosition(target);
+            target.y += 0.7;
+          }
+          mesh.position.copy(start).add(new THREE.Vector3(0, 0.8, 0)).lerp(target, eased);
+          mesh.position.y += Math.sin(progress * Math.PI) * 0.65;
+          mesh.rotateY(progress * Math.PI * 1.5);
+          mesh.rotateZ(Math.sin(progress * Math.PI) * 0.25);
+          const collect = Math.max(0, (progress - 0.35) / 0.65);
+          mesh.scale.copy(scale).multiplyScalar(0.8 * (1 - collect * collect));
+          if (progress >= 1) {
+            this.scene.remove(mesh);
+            const geometries = new Set();
+            mesh.traverse(object => {
+              if (object.isMesh) geometries.add(object.geometry);
+            });
+            geometries.forEach(geometry => geometry.dispose());
+            crop.stage = 'wilted';
+            this.harvestAnimations.splice(index, 1);
+          }
+        }
+      }
+    }
   }
 
   spawnHarvestParticles(pos, cropType) {
@@ -341,6 +401,7 @@ export class CropSystem {
   }
 
   update(delta) {
+    this.updateHarvestAnimations(delta);
     // 1. Grow planted crops through 4 distinct stages
     for (const crop of this.crops) {
       if (crop.stage === 'sprout') {
