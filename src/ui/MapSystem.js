@@ -12,7 +12,13 @@ export class MapSystem {
       barn: { id: 'barn', name: 'Rustic Barn 🛖', x: -14.0, z: -22.0, icon: '🛖', color: '#bc4749' },
       windmill: { id: 'windmill', name: 'Windmill ⚙️', x: 22.0, z: -16.0, icon: '⚙️', color: '#48cae4' },
       pond: { id: 'pond', name: 'Cozy Pond 🌊', x: -18.0, z: 10.0, icon: '🌊', color: '#0077b6' },
-      secretPond: { id: 'secretPond', name: 'Secret Fishing Spot 🎣', x: 42.0, z: 30.0, icon: '🎣', color: '#69f5c8' }
+      secretPond: { id: 'secretPond', name: 'Secret Fishing Spot 🎣', x: 42.0, z: 30.0, icon: '🎣', color: '#69f5c8' },
+      enchantedForest: { id: 'enchantedForest', name: 'Enchanted Forest 🌲', x: 38.0, z: -22.0, icon: '🌲', color: '#7b2fbe' },
+      ancientRuins: { id: 'ancientRuins', name: 'Ancient Ruins 🏛️', x: -36.0, z: -18.0, icon: '🏛️', color: '#c4943a' },
+      snowyMountain: { id: 'snowyMountain', name: 'Snowy Mountain ❄️', x: 30.0, z: 28.0, icon: '❄️', color: '#88ccff' },
+      mysticLake: { id: 'mysticLake', name: 'Mystic Lake 🌊', x: -24.0, z: 24.0, icon: '🌊', color: '#00b4d8' },
+      starryMeadow: { id: 'starryMeadow', name: 'Starry Meadow ⭐', x: 40.0, z: 18.0, icon: '⭐', color: '#ffd166' },
+      harvestMaze: { id: 'harvestMaze', name: 'Harvest Maze 🎃', x: -32.0, z: -24.0, icon: '🎃', color: '#ff6b35' },
     };
 
     // Active destination for path drawing
@@ -117,6 +123,48 @@ export class MapSystem {
                 <div class="dest-info">
                   <strong>Secret Fishing Spot</strong>
                   <span id="dist-secretPond">0m away</span>
+                </div>
+              </button>
+              <button class="dest-btn" data-dest="enchantedForest" style="border-left: 3px solid #7b2fbe;">
+                <span class="dest-icon">🌲</span>
+                <div class="dest-info">
+                  <strong>Enchanted Forest</strong>
+                  <span id="dist-enchantedForest">0m away</span>
+                </div>
+              </button>
+              <button class="dest-btn" data-dest="ancientRuins" style="border-left: 3px solid #c4943a;">
+                <span class="dest-icon">🏛️</span>
+                <div class="dest-info">
+                  <strong>Ancient Ruins Temple</strong>
+                  <span id="dist-ancientRuins">0m away</span>
+                </div>
+              </button>
+              <button class="dest-btn" data-dest="snowyMountain" style="border-left: 3px solid #88ccff;">
+                <span class="dest-icon">❄️</span>
+                <div class="dest-info">
+                  <strong>Snowy Mountain Peak</strong>
+                  <span id="dist-snowyMountain">0m away</span>
+                </div>
+              </button>
+              <button class="dest-btn" data-dest="mysticLake" style="border-left: 3px solid #00b4d8;">
+                <span class="dest-icon">🌊</span>
+                <div class="dest-info">
+                  <strong>Mystic Lake Depths</strong>
+                  <span id="dist-mysticLake">0m away</span>
+                </div>
+              </button>
+              <button class="dest-btn" data-dest="starryMeadow" style="border-left: 3px solid #ffd166;">
+                <span class="dest-icon">⭐</span>
+                <div class="dest-info">
+                  <strong>Starry Meadow</strong>
+                  <span id="dist-starryMeadow">0m away</span>
+                </div>
+              </button>
+              <button class="dest-btn" data-dest="harvestMaze" style="border-left: 3px solid #ff6b35;">
+                <span class="dest-icon">🎃</span>
+                <div class="dest-info">
+                  <strong>Harvest Corn Maze</strong>
+                  <span id="dist-harvestMaze">0m away</span>
                 </div>
               </button>
             </div>

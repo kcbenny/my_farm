@@ -18,6 +18,7 @@ import { LivestockSystem } from './world/LivestockSystem.js';
 import { GLTFExportManager } from './gameplay/GLTFExportManager.js';
 import { normalizeAsset } from './gameplay/WorldPhysics.js';
 import { SecretFishingSpot } from './world/SecretFishingSpot.js';
+import { MapManager } from './world/MapManager.js';
 
 class FarmGame {
   constructor() {
@@ -92,6 +93,7 @@ class FarmGame {
     const getTerrainHeight = (x, z) => this.farm.physics.surfaceAt(x, z)?.height ?? this.farm.getTerrainHeight(x, z);
     const resolveCollision = (pos, radius) => this.farm.resolveCollision(pos, radius);
     this.secretFishingSpot = new SecretFishingSpot(this.scene, getTerrainHeight);
+    this.mapManager = new MapManager(this.scene, getTerrainHeight);
 
     // Determine active character (default to Cozy low-poly kitty)
     let initialCharId = 'cozy';
@@ -386,6 +388,17 @@ class FarmGame {
       return;
     }
 
+    // Adventure Map Portals
+    const nearPortal = this.mapManager.isNearFarmPortal(this.controller.position);
+    if (nearPortal) {
+      this.travelToAdventureMap(nearPortal);
+      return;
+    }
+    if (this.mapManager.isNearReturnPortal(this.controller.position)) {
+      this.returnFromAdventureMap();
+      return;
+    }
+
     // 1. Check Harvestable Ripe Crop
     const nearestCrop = this.cropSystem.getNearestHarvestableCrop(this.controller.position);
     if (nearestCrop) {
@@ -487,9 +500,35 @@ class FarmGame {
   }
 
   returnToFarm() {
-    this.teleportPlayer(this.secretFishingSpot.getFarmArrival());
-    this.mapSystem?.setDestination('shop');
-    this.ui.showToast('✨ You return to the cozy farm.');
+    // Return from Secret Fishing Spot
+    if (this.isAtSecretFishingSpot()) {
+      this.teleportPlayer(this.secretFishingSpot.getFarmArrival());
+      this.mapSystem?.setDestination('shop');
+      this.ui.showToast('✨ You return to the cozy farm.');
+      return;
+    }
+    // Return from adventure map
+    const arrival = this.mapManager.returnToFarm();
+    if (arrival) {
+      this.teleportPlayer(arrival);
+      this.mapSystem?.setDestination('shop');
+      this.ui.showToast('✨ The portal brings you back to the farm!');
+    }
+  }
+
+  travelToAdventureMap(mapId) {
+    const cfg = this.mapManager.getPortalConfig(mapId);
+    if (!cfg) return;
+    const arrival = this.mapManager.travelToMap(mapId);
+    if (arrival) {
+      this.teleportPlayer(arrival);
+      this.mapSystem?.setDestination(mapId);
+      this.ui.showToast(`✨ ${cfg.name} — ${cfg.subtitle}! Press [E] by the return portal to come back.`);
+    }
+  }
+
+  returnFromAdventureMap() {
+    this.returnToFarm();
   }
 
   isAtSecretFishingSpot() {
@@ -537,6 +576,7 @@ class FarmGame {
     // Update Farm Ambient Animations
     this.farm.update(delta);
     this.secretFishingSpot.update(delta);
+    this.mapManager.update(delta);
 
     this.farm.physics.update();
     this.playerPhysics.updatePlayerPhysics(delta);
@@ -615,13 +655,20 @@ class FarmGame {
       }
     }
 
-    // Dynamic Interaction Prompts (Harvest / Plant Seed / Construct Kitty Home / Shop)
+    // Dynamic Interaction Prompts (Harvest / Plant Seed / Construct Kitty Home / Shop / Portal)
     const nearCrop = this.cropSystem.getNearestHarvestableCrop(this.controller.position);
     const nearEmptyPlot = this.cropSystem.getNearestEmptyPlot(this.controller.position);
     const distToHome = this.kittyHome ? this.kittyHome.getDistanceToPlayer(this.controller.position) : 99;
     const distToShop = (this.farm && this.farm.shopStallPos) ? this.controller.position.distanceTo(this.farm.shopStallPos) : 99;
+    const nearPortalId = this.mapManager.isNearFarmPortal(this.controller.position);
+    const nearReturnPortal = this.mapManager.isNearReturnPortal(this.controller.position);
 
-    if (nearCrop) {
+    if (nearPortalId) {
+      const cfg = this.mapManager.getPortalConfig(nearPortalId);
+      this.ui.showInteractionPrompt(`Enter ${cfg.name}`);
+    } else if (nearReturnPortal) {
+      this.ui.showInteractionPrompt('Return to Farm 🏠');
+    } else if (nearCrop) {
       this.ui.showInteractionPrompt(`Harvest ${nearCrop.type.toUpperCase()}`);
     } else if (nearEmptyPlot) {
       const activeSeed = this.shop.activeSeed;

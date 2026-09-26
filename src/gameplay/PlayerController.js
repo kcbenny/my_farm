@@ -9,6 +9,7 @@ export class PlayerController {
     this.getTerrainHeight = getTerrainHeight || ((x, z) => 0);
     this.resolveCollision = resolveCollision || null;
     this.terrainMesh = terrainMesh;
+    this.terrainMeshes = terrainMesh ? [terrainMesh] : [];
     this.groundRaycaster = new THREE.Raycaster();
     this.groundRayOrigin = new THREE.Vector3();
     this.groundRayDirection = new THREE.Vector3(0, -1, 0);
@@ -118,15 +119,22 @@ export class PlayerController {
 
   getGroundHeightAt(x, z) {
     let groundY = this.getTerrainHeight(x, z);
-    if (this.terrainMesh) {
-      this.groundRayOrigin.set(x, this.position.y + 30, z);
-      this.groundRaycaster.set(this.groundRayOrigin, this.groundRayDirection);
-      const hits = this.groundRaycaster.intersectObject(this.terrainMesh, false);
+    this.groundRayOrigin.set(x, this.position.y + 30, z);
+    this.groundRaycaster.set(this.groundRayOrigin, this.groundRayDirection);
+    for (const mesh of this.terrainMeshes) {
+      const hits = this.groundRaycaster.intersectObject(mesh, false);
       if (hits.length > 0) {
         groundY = hits[0].point.y;
+        break;
       }
     }
     return groundY;
+  }
+
+  addTerrainMesh(mesh) {
+    if (mesh && !this.terrainMeshes.includes(mesh)) {
+      this.terrainMeshes.push(mesh);
+    }
   }
 
   setupKeyboardListeners() {
