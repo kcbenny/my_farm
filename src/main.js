@@ -589,6 +589,12 @@ class FarmGame {
 
     this.farm.physics.update();
     this.playerPhysics.updatePlayerPhysics(delta);
+
+    // Adventure map interactions (collectibles, puzzles)
+    if (this.mapManager.isInAdventureMap()) {
+      this.mapManager.checkMapInteractions(this.controller.position);
+    }
+
     this.kittyHome.updatePlacement(this.camera, document.pointerLockElement ? new THREE.Vector2() : this.placementPointer);
 
     // Render after movement so the map arrow uses the cat's actual world-facing direction.
@@ -677,6 +683,16 @@ class FarmGame {
       this.ui.showInteractionPrompt(`Enter ${cfg.name}`);
     } else if (nearReturnPortal) {
       this.ui.showInteractionPrompt('Return to Farm 🏠');
+    } else if (this.mapManager.isInAdventureMap()) {
+      // Show collectible progress in adventure maps
+      const prog = this.mapManager.getActiveMapProgress();
+      if (prog) {
+        if (prog.collected >= prog.total) {
+          this.ui.showInteractionPrompt('🎉 All treasures found! Return to Farm 🏠');
+        } else {
+          this.ui.showInteractionPrompt(`💎 Treasures: ${prog.collected}/${prog.total}  ·  Return to Farm 🏠`);
+        }
+      }
     } else if (nearCrop) {
       this.ui.showInteractionPrompt(`Harvest ${nearCrop.type.toUpperCase()}`);
     } else if (nearEmptyPlot) {

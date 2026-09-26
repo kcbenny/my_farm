@@ -1,179 +1,144 @@
 import * as THREE from 'three';
-import { ADVENTURE_MAPS } from './PortalSystem.js';
+import { AdventureBase } from './AdventureBase.js';
 
-const m = {
-  ground: new THREE.MeshStandardMaterial({ color: 0x1a3a2a, roughness: 0.95, flatShading: true }),
-  trunk: new THREE.MeshStandardMaterial({ color: 0x3d2817, roughness: 0.95, flatShading: true }),
-  leaves: new THREE.MeshStandardMaterial({ color: 0x0f3d1f, roughness: 0.85, flatShading: true }),
-  mushStem: new THREE.MeshStandardMaterial({ color: 0xe8dcc8, roughness: 0.8, flatShading: true }),
-  mushCap: (hue) => new THREE.MeshBasicMaterial({ color: new THREE.Color().setHSL(hue, 0.9, 0.55) }),
-  wisp: new THREE.MeshBasicMaterial({ color: 0xaaddff, transparent: true, opacity: 0.7 }),
-  mist: new THREE.MeshBasicMaterial({ color: 0x88aacc, transparent: true, opacity: 0.08, side: THREE.DoubleSide }),
+const GEO = {
+  cone12: new THREE.ConeGeometry(1, 1, 12),
+  sphere12: new THREE.SphereGeometry(1, 12, 8),
 };
 
-export class EnchantedForest {
-  constructor(scene, getTerrainHeight) {
-    this.groundY = 0;
-    this.scene = scene;
-    this.time = 0;
+const MAT = {
+  moss: new THREE.MeshStandardMaterial({ color: 0x2d5a1e, roughness: 0.85 }),
+  trunk: new THREE.MeshStandardMaterial({ color: 0x3d2817, roughness: 0.9 }),
+  leaf: new THREE.MeshStandardMaterial({ color: 0x1a4a2a, roughness: 0.8 }),
+  mushStem: new THREE.MeshStandardMaterial({ color: 0xe8dcc8, roughness: 0.7 }),
+  mushCap: (h) => new THREE.MeshBasicMaterial({ color: new THREE.Color().setHSL(h, 0.85, 0.5) }),
+  wisp: new THREE.MeshBasicMaterial({ color: 0x88ccff, transparent: true, opacity: 0.7 }),
+  mist: new THREE.MeshBasicMaterial({ color: 0x6699aa, transparent: true, opacity: 0.06, side: THREE.DoubleSide }),
+};
+
+export class EnchantedForest extends AdventureBase {
+  constructor(scene, getTerrainHeight, cfg) {
+    super(scene, cfg);
     this.wisps = [];
-    this.mushrooms = [];
+    this.build();
+  }
 
-    const cfg = ADVENTURE_MAPS.enchantedForest;
-    const o = cfg.mapOffset.clone();
-
-    this.group = new THREE.Group();
-    this.group.name = 'EnchantedForest';
-    this.group.position.copy(o);
-    scene.add(this.group);
-
+  build() {
     // Ground
-    const ground = new THREE.Mesh(new THREE.CylinderGeometry(16, 16.5, 0.5, 32), m.ground);
+    const ground = new THREE.Mesh(new THREE.CylinderGeometry(16, 16.5, 0.5, 32), MAT.moss);
     ground.position.y = -0.25;
     ground.receiveShadow = true;
     this.group.add(ground);
 
-    // Giant trees
-    for (let i = 0; i < 18; i++) {
-      const angle = (i / 18) * Math.PI * 2 + 0.15;
-      const radius = 15 + (i % 3) * 0.6;
-      const tree = this.makeGiantTree(1.0 + (i % 3) * 0.3);
-      tree.position.set(Math.sin(angle) * radius, 0, Math.cos(angle) * radius);
+    // Giant trees (ring)
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2;
+      const r = 13.5 + (i % 3) * 1.2;
+      const tree = this.makeTree(1.0 + (i % 3) * 0.25);
+      tree.position.set(Math.sin(a) * r, 0, Math.cos(a) * r);
       this.group.add(tree);
     }
 
-    // Giant glowing mushrooms
-    for (let i = 0; i < 12; i++) {
-      const angle = (i / 12) * Math.PI * 2;
-      const radius = 6 + (i % 4) * 2.5;
-      const mush = this.makeMushroom(0.7 + Math.random() * 0.8, i / 12);
-      mush.position.set(Math.sin(angle) * radius, 0, Math.cos(angle) * radius);
+    // Giant mushrooms
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2;
+      const r = 5.5 + (i % 4) * 2;
+      const mush = new THREE.Group();
+      const stem = new THREE.Mesh(GEO.cone12, MAT.mushStem);
+      stem.scale.set(0.2, 1.2, 0.2);
+      stem.position.y = 0.6;
+      mush.add(stem);
+      const cap = new THREE.Mesh(GEO.sphere12, MAT.mushCap(i / 10));
+      cap.scale.set(0.6, 0.35, 0.6);
+      cap.position.y = 1.2;
+      mush.add(cap);
+      mush.position.set(Math.sin(a) * r, 0, Math.cos(a) * r);
       this.group.add(mush);
-      this.mushrooms.push({ mesh: mush, phase: Math.random() * Math.PI * 2 });
     }
 
-    // Mist planes
-    for (let i = 0; i < 5; i++) {
-      const mist = new THREE.Mesh(new THREE.PlaneGeometry(30, 6, 1, 1), m.mist);
-      mist.rotation.y = i * 0.6;
-      mist.position.set(0, 1.5 + i * 0.4, 0);
-      this.group.add(mist);
-    }
-
-    // Floating wisps
-    for (let i = 0; i < 20; i++) {
-      const wisp = new THREE.PointLight(0xaaddff, 0.8, 3, 2);
-      wisp.position.set(
-        (Math.random() - 0.5) * 24,
-        0.5 + Math.random() * 3,
-        (Math.random() - 0.5) * 24
-      );
-      this.group.add(wisp);
-      this.wisps.push({
-        light: wisp,
-        baseX: wisp.position.x,
-        baseZ: wisp.position.z,
-        phase: Math.random() * Math.PI * 2,
-        speed: 0.3 + Math.random() * 0.5,
-        amp: 1 + Math.random() * 2,
-        baseY: wisp.position.y,
-      });
-    }
-
-    // Central glowing tree stump (focal point)
-    const stump = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.8, 1.2, 8), m.trunk);
-    stump.position.y = 0.6;
+    // Central ancient tree stump
+    const stump = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 2.2, 2, 24), MAT.trunk);
+    stump.position.y = 1;
     stump.castShadow = true;
     this.group.add(stump);
-    const stumpGlow = new THREE.Mesh(
-      new THREE.SphereGeometry(0.55, 8, 6),
-      new THREE.MeshBasicMaterial({ color: 0x7b2fbe, transparent: true, opacity: 0.6 })
-    );
-    stumpGlow.position.y = 1.4;
+
+    const stumpGlow = new THREE.Mesh(GEO.sphere12, new THREE.MeshBasicMaterial({ color: 0x9944ff, transparent: true, opacity: 0.55 }));
+    stumpGlow.scale.set(0.7, 0.7, 0.7);
+    stumpGlow.position.y = 2.2;
     this.group.add(stumpGlow);
     this.stumpGlow = stumpGlow;
 
-    // Return portal at the forest
-    this.getGroundY = () => this.groundY;
-    this.addReturnPortal(cfg);
+    // Ambient light (only 1 PointLight)
+    const ambientLight = new THREE.PointLight(0x6699cc, 1.5, 15, 2);
+    ambientLight.position.y = 3;
+    this.group.add(ambientLight);
+
+    // Mist planes
+    for (let i = 0; i < 4; i++) {
+      const mist = new THREE.Mesh(new THREE.PlaneGeometry(28, 5), MAT.mist);
+      mist.rotation.y = i * 0.7;
+      mist.position.set(0, 1.2 + i * 0.5, 0);
+      this.group.add(mist);
+    }
+
+    // Floating wisps (emissive spheres, NOT PointLights)
+    for (let i = 0; i < 16; i++) {
+      const wisp = new THREE.Mesh(GEO.sphere12, MAT.wisp.clone());
+      wisp.scale.setScalar(0.12);
+      const bx = (Math.random() - 0.5) * 20;
+      const bz = (Math.random() - 0.5) * 20;
+      const by = 0.6 + Math.random() * 2.5;
+      wisp.position.set(bx, by, bz);
+      this.group.add(wisp);
+      this.wisps.push({
+        mesh: wisp,
+        baseX: bx, baseZ: bz, baseY: by,
+        phase: Math.random() * Math.PI * 2,
+        speed: 0.3 + Math.random() * 0.5,
+      });
+    }
+
+    // Collectibles — fairy dust
+    const fairyGems = [];
+    for (let i = 0; i < 14; i++) {
+      const a = i * 0.8 + Math.random() * 0.5;
+      const r = 3 + Math.random() * 9;
+      fairyGems.push(new THREE.Vector3(Math.sin(a) * r, 0.5 + Math.random() * 0.6, Math.cos(a) * r));
+    }
+    this.spawnGems(fairyGems, 0.2);
+
+    this.addReturnPortal(cfg, new THREE.Vector3(0, 0, -8));
   }
 
-  makeGiantTree(scale) {
+  makeTree(scale) {
     const tree = new THREE.Group();
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.3 * scale, 0.5 * scale, 3.5 * scale, 6), m.trunk);
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.35 * scale, 0.5 * scale, 3.5 * scale, 12), MAT.trunk);
     trunk.position.y = 1.75 * scale;
     trunk.castShadow = true;
     tree.add(trunk);
     for (let i = 0; i < 4; i++) {
-      const leaves = new THREE.Mesh(new THREE.ConeGeometry((2.2 - i * 0.3) * scale, 1.6 * scale, 6), m.leaves);
-      leaves.position.y = (2.8 + i * 1.0) * scale;
-      leaves.castShadow = true;
-      tree.add(leaves);
+      const leaf = new THREE.Mesh(GEO.cone12, MAT.leaf);
+      leaf.scale.set((2.3 - i * 0.25) * scale, 1.5 * scale, (2.3 - i * 0.25) * scale);
+      leaf.position.y = (2.6 + i * 1.0) * scale;
+      leaf.castShadow = true;
+      tree.add(leaf);
     }
     return tree;
   }
 
-  makeMushroom(scale, hue) {
-    const mush = new THREE.Group();
-    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.12 * scale, 0.18 * scale, 1.2 * scale, 6), m.mushStem);
-    stem.position.y = 0.6 * scale;
-    mush.add(stem);
-    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.55 * scale, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2), m.mushCap(hue));
-    cap.position.y = 1.1 * scale;
-    mush.add(cap);
-    return mush;
-  }
-
-  addReturnPortal(cfg) {
-    const glow = new THREE.MeshBasicMaterial({ color: cfg.color, transparent: true, opacity: 0.75, side: THREE.DoubleSide });
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.05, 0.15, 6, 12), glow);
-    ring.position.y = 1.4;
-    ring.rotation.y = Math.PI / 2;
-    const light = new THREE.PointLight(cfg.color, 2.4, 9, 1.8);
-    light.position.y = 1.4;
-
-    this.returnPortal = new THREE.Group();
-    this.returnPortal.add(ring);
-    this.returnPortal.add(light);
-    this.returnPortal.name = 'ReturnPortal_Forest';
-    this.returnPortal.position.set(0, 0, -8);
-    this.group.add(this.returnPortal);
-    this.returnRing = ring;
-    this.returnLight = light;
-  }
-
-  getReturnPosition() {
-    const pos = new THREE.Vector3();
-    this.returnPortal.getWorldPosition(pos);
-    return pos;
-  }
-
-  isNearReturnPortal(position) {
-    const rp = this.getReturnPosition();
-    return position.distanceToSquared(rp) < 7.5;
-  }
-
   update(delta) {
-    this.time += delta;
-    // Animate wisps
-    this.wisps.forEach(w => {
-      w.light.position.x = w.baseX + Math.sin(this.time * w.speed + w.phase) * w.amp;
-      w.light.position.z = w.baseZ + Math.cos(this.time * w.speed * 0.7 + w.phase) * w.amp * 0.7;
-      w.light.position.y = w.baseY + Math.sin(this.time * 1.3 + w.phase) * 0.5;
-      w.light.intensity = 0.5 + Math.sin(this.time * 2 + w.phase) * 0.3;
-    });
-    // Pulse mushrooms
-    this.mushrooms.forEach(m => {
-      m.mesh.scale.setScalar(1 + Math.sin(this.time * 1.5 + m.phase) * 0.06);
-    });
-    // Pulse stump glow
+    super.update(delta);
+
     if (this.stumpGlow) {
-      this.stumpGlow.scale.setScalar(1 + Math.sin(this.time * 2) * 0.15);
+      this.stumpGlow.scale.setScalar(0.7 + Math.sin(this.time * 2) * 0.1);
+      this.stumpGlow.material.opacity = 0.4 + Math.sin(this.time * 3) * 0.15;
     }
-    // Spinning return portal
-    if (this.returnRing) {
-      this.returnRing.rotation.z = this.time * 0.8;
-      this.returnRing.scale.setScalar(1 + Math.sin(this.time * 2) * 0.05);
+
+    for (const w of this.wisps) {
+      w.mesh.position.x = w.baseX + Math.sin(this.time * w.speed + w.phase) * 2;
+      w.mesh.position.z = w.baseZ + Math.cos(this.time * w.speed * 0.7 + w.phase) * 1.5;
+      w.mesh.position.y = w.baseY + Math.sin(this.time * 1.3 + w.phase) * 0.5;
+      w.mesh.material.opacity = 0.4 + Math.sin(this.time * 3 + w.phase) * 0.3;
     }
   }
 }

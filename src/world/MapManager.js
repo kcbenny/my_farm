@@ -23,6 +23,9 @@ export class MapManager {
     this.portalSystem = new PortalSystem(scene, getTerrainHeight);
     this.maps = {};
     this.activeMapId = null;
+
+    /** Callback: (pos: Vector3, collected: number, total: number) => void */
+    this.onCollect = null;
   }
 
   getActiveMap() {
@@ -49,19 +52,21 @@ export class MapManager {
   travelToMap(mapId) {
     if (!MapClasses[mapId]) return null;
 
-    // Lazy-load map if not yet created
+    const cfg = ADVENTURE_MAPS[mapId];
     if (!this.maps[mapId]) {
-      this.maps[mapId] = new MapClasses[mapId](this.scene, this.getTerrainHeight);
+      this.maps[mapId] = new MapClasses[mapId](this.scene, this.getTerrainHeight, cfg);
+      const map = this.maps[mapId];
+      if (map.onCollectCallback !== undefined) {
+        map.onCollectCallback = this.onCollect;
+      }
     }
 
     this.activeMapId = mapId;
-    const cfg = ADVENTURE_MAPS[mapId];
     return cfg.mapArrival.clone();
   }
 
   returnToFarm() {
     if (!this.activeMapId) return null;
-
     const cfg = ADVENTURE_MAPS[this.activeMapId];
     this.activeMapId = null;
     return cfg.farmArrival.clone();
@@ -75,6 +80,39 @@ export class MapManager {
     if (!this.activeMapId) return null;
     const map = this.maps[this.activeMapId];
     return map ? map.getGroundY() : 0;
+  }
+
+  /** Check collectibles + puzzle for the active map */
+  checkMapInteractions(playerPos) {
+    if (!this.activeMapId) return false;
+    const map = this.maps[this.activeMapId];
+    if (!map) return false;
+
+    let interacted = false;
+
+    // Collectible gems
+    if (map.checkCollect) {
+      if (map.checkCollect(playerPos)) interacted = true;
+    }
+
+    // Ancient Ruins rune puzzle
+    if (map.checkRunePuzzle) {
+      if (map.checkRunePuzzle(playerPos)) interacted = true;
+    }
+
+    return interacted;
+  }
+
+  getActiveMapProgress() {
+    if (!this.activeMapId) return null;
+    const map = this.maps[this.activeMapId];
+    return map ? map.getProgress() : null;
+  }
+
+  isActiveMapComplete() {
+    if (!this.activeMapId) return false;
+    const map = this.maps[this.activeMapId];
+    return map ? map.isComplete() : false;
   }
 
   update(delta) {
