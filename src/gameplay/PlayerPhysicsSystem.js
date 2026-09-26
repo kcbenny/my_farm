@@ -114,7 +114,7 @@ export class PlayerPhysicsSystem {
       candidate.y = nextGround + pivotOffset + Math.max(0, controller.jumpOffset || 0);
       if (!inAdventure && this.hasHorizontalCollision(candidate)) break;
       controller.position.copy(candidate);
-      this.resolveCollision?.({ position: controller.position, previousPosition }, this.playerRadius);
+      if (!inAdventure) this.resolveCollision?.({ position: controller.position, previousPosition }, this.playerRadius);
     }
   }
 

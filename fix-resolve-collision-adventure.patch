@@ -1,0 +1,35 @@
+From 2d2a118be387fe1c7aa43a028efe7abcd046ccc5 Mon Sep 17 00:00:00 2001
+From: Benny Cheung <benny@example.com>
+Date: Sun, 27 Sep 2026 00:09:55 +0800
+Subject: [PATCH] Fix: resolveCollision clamps player back to farm boundary in
+ adventure maps
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Root cause: resolveCollision() (which calls clampToBoundary on farm terrain mesh)
+was called unconditionally in movePlayer(), even in adventure maps.
+This clamped player x/z back to farm boundary (~±38), causing player to appear
+'stuck' or 'sinking' in adventure maps like Ancient Ruins (at x=-220).
+
+already used for hasHorizontalCollision.
+---
+ src/gameplay/PlayerPhysicsSystem.js | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/gameplay/PlayerPhysicsSystem.js b/src/gameplay/PlayerPhysicsSystem.js
+index 5243cfc..c239b9f 100755
+--- a/src/gameplay/PlayerPhysicsSystem.js
++++ b/src/gameplay/PlayerPhysicsSystem.js
+@@ -114,7 +114,7 @@ export class PlayerPhysicsSystem {
+       candidate.y = nextGround + pivotOffset + Math.max(0, controller.jumpOffset || 0);
+       if (!inAdventure && this.hasHorizontalCollision(candidate)) break;
+       controller.position.copy(candidate);
+-      this.resolveCollision?.({ position: controller.position, previousPosition }, this.playerRadius);
++      if (!inAdventure) this.resolveCollision?.({ position: controller.position, previousPosition }, this.playerRadius);
+     }
+   }
+ 
+-- 
+2.34.1
+
