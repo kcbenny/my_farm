@@ -13,6 +13,7 @@ const m = {
 
 export class HarvestMaze {
   constructor(scene, getTerrainHeight) {
+    this.groundY = 0;
     this.scene = scene;
     this.time = 0;
     this.pumpkinLights = [];
@@ -27,7 +28,7 @@ export class HarvestMaze {
 
     // Ground
     const ground = new THREE.Mesh(new THREE.CylinderGeometry(15, 15.5, 0.5, 32), m.dirt);
-    ground.position.y = -0.15;
+    ground.position.y = -0.25;
     ground.receiveShadow = true;
     this.group.add(ground);
 
@@ -128,6 +129,7 @@ export class HarvestMaze {
     scarecrow.position.set(0, 0, 3);
     this.group.add(scarecrow);
 
+    this.getGroundY = () => this.groundY;
     this.addReturnPortal(cfg);
   }
 

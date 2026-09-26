@@ -10,6 +10,7 @@ export class PlayerController {
     this.resolveCollision = resolveCollision || null;
     this.terrainMesh = terrainMesh;
     this.terrainMeshes = terrainMesh ? [terrainMesh] : [];
+    this.adventureGroundY = null; // overridden when in adventure map
     this.groundRaycaster = new THREE.Raycaster();
     this.groundRayOrigin = new THREE.Vector3();
     this.groundRayDirection = new THREE.Vector3(0, -1, 0);

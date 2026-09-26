@@ -26,7 +26,12 @@ export class PlayerPhysicsSystem {
 
   getGroundHeightAt(x, z) {
     if (this.worldPhysics) {
-      return this.worldPhysics.surfaceAt(x, z)?.height ?? this.getTerrainHeight(x, z);
+      const surface = this.worldPhysics.surfaceAt(x, z);
+      if (surface) return surface.height;
+    }
+    // Adventure map fallback: outside farm terrain range
+    if (Math.abs(x) > 55 || Math.abs(z) > 55) {
+      return this.controller.adventureGroundY ?? 0;
     }
     let groundY = this.getTerrainHeight(x, z);
     if (this.terrainMesh) {
@@ -56,7 +61,8 @@ export class PlayerPhysicsSystem {
     }
     const desiredY = floor + controller.jumpOffset;
     let resolvedY = desiredY;
-    if (this.worldPhysics && controller.position.y >= floor && desiredY !== controller.position.y) {
+    const inAdventure = Math.abs(controller.position.x) > 55 || Math.abs(controller.position.z) > 55;
+    if (!inAdventure && this.worldPhysics && controller.position.y >= floor && desiredY !== controller.position.y) {
       const startY = controller.position.y;
       const steps = Math.max(1, Math.ceil(Math.abs(desiredY - startY) / (this.playerRadius * 0.5)));
       const candidate = controller.position.clone();
@@ -89,11 +95,12 @@ export class PlayerPhysicsSystem {
     const controller = this.controller;
     const steps = Math.max(1, Math.ceil(displacement.length() / (this.playerRadius * 0.5)));
     const step = displacement.clone().divideScalar(steps);
+    const inAdventure = Math.abs(controller.position.x) > 55 || Math.abs(controller.position.z) > 55;
     for (let index = 0; index < steps; index++) {
       const previousPosition = controller.position.clone();
       const currentGround = this.getGroundHeightAt(previousPosition.x, previousPosition.z);
       const candidate = previousPosition.clone().add(step);
-      if (this.worldPhysics && !this.worldPhysics.surfaceAt(candidate.x, candidate.z)) break;
+      if (!inAdventure && this.worldPhysics && !this.worldPhysics.surfaceAt(candidate.x, candidate.z)) break;
       const nextGround = this.getGroundHeightAt(candidate.x, candidate.z);
       if (controller.isGrounded && nextGround - currentGround > this.maxTerrainStep) break;
       candidate.y = nextGround + (controller.cat.mesh.userData.playerPivotOffset || 0) + Math.max(0, controller.jumpOffset || 0);

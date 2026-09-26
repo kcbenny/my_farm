@@ -13,6 +13,7 @@ export class StarryMeadow {
   constructor(scene, getTerrainHeight) {
     this.scene = scene;
     this.time = 0;
+    this.groundY = 0;
     this.stars = [];
     this.fireflies = [];
     this.shootingStars = [];
@@ -27,7 +28,7 @@ export class StarryMeadow {
 
     // Dark grass ground
     const ground = new THREE.Mesh(new THREE.CylinderGeometry(15, 15.5, 0.5, 32), m.grass);
-    ground.position.y = -0.15;
+    ground.position.y = -0.25;
     ground.receiveShadow = true;
     this.group.add(ground);
 
@@ -105,6 +106,7 @@ export class StarryMeadow {
     }
 
     this.addReturnPortal(cfg);
+    this.getGroundY = () => this.groundY;
   }
 
   addReturnPortal(cfg) {

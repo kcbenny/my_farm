@@ -10,6 +10,7 @@ const m = {
 
 export class SnowyMountain {
   constructor(scene, getTerrainHeight) {
+    this.groundY = 0;
     this.scene = scene;
     this.time = 0;
     this.particles = [];
@@ -24,7 +25,7 @@ export class SnowyMountain {
 
     // Base snow ground
     const ground = new THREE.Mesh(new THREE.CylinderGeometry(15, 15.5, 0.5, 32), m.snow);
-    ground.position.y = -0.15;
+    ground.position.y = -0.25;
     ground.receiveShadow = true;
     this.group.add(ground);
 
@@ -97,6 +98,7 @@ export class SnowyMountain {
       });
     }
 
+    this.getGroundY = () => this.groundY;
     this.addReturnPortal(cfg);
   }
 

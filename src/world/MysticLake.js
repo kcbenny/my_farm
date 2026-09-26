@@ -12,6 +12,7 @@ const m = {
 
 export class MysticLake {
   constructor(scene, getTerrainHeight) {
+    this.groundY = 0;
     this.scene = scene;
     this.time = 0;
     this.fish = [];
@@ -28,7 +29,7 @@ export class MysticLake {
 
     // Ground ring
     const ground = new THREE.Mesh(new THREE.CylinderGeometry(16, 16.5, 0.5, 32), m.grass);
-    ground.position.y = -0.15;
+    ground.position.y = -0.25;
     ground.receiveShadow = true;
     this.group.add(ground);
 
@@ -112,6 +113,7 @@ export class MysticLake {
     dock.position.set(0, 0, 8.5);
     this.group.add(dock);
 
+    this.getGroundY = () => this.groundY;
     this.addReturnPortal(cfg);
   }
 

@@ -13,6 +13,7 @@ const m = {
 
 export class EnchantedForest {
   constructor(scene, getTerrainHeight) {
+    this.groundY = 0;
     this.scene = scene;
     this.time = 0;
     this.wisps = [];
@@ -28,7 +29,7 @@ export class EnchantedForest {
 
     // Ground
     const ground = new THREE.Mesh(new THREE.CylinderGeometry(16, 16.5, 0.5, 32), m.ground);
-    ground.position.y = -0.15;
+    ground.position.y = -0.25;
     ground.receiveShadow = true;
     this.group.add(ground);
 
@@ -93,6 +94,7 @@ export class EnchantedForest {
     this.stumpGlow = stumpGlow;
 
     // Return portal at the forest
+    this.getGroundY = () => this.groundY;
     this.addReturnPortal(cfg);
   }
 

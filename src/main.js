@@ -482,11 +482,19 @@ class FarmGame {
     this.ui.showToast('🌱 Stand closer to a crop, shop, kitty home, or magical portal!');
   }
 
-  teleportPlayer(position) {
+  teleportPlayer(position, groundY = null) {
     const pivotOffset = this.cat.mesh.userData.playerPivotOffset || 0;
-    const surface = this.farm.physics.surfaceAt(position.x, position.z);
-    this.controller.position.copy(position);
-    this.controller.position.y = (surface?.height ?? this.farm.getTerrainHeight(position.x, position.z)) + pivotOffset;
+    if (groundY !== null) {
+      // Adventure map teleport: use explicit flat ground
+      this.controller.position.copy(position);
+      this.controller.position.y = groundY + pivotOffset;
+      this.controller.adventureGroundY = groundY;
+    } else {
+      const surface = this.farm.physics.surfaceAt(position.x, position.z);
+      this.controller.position.copy(position);
+      this.controller.position.y = (surface?.height ?? this.farm.getTerrainHeight(position.x, position.z)) + pivotOffset;
+      this.controller.adventureGroundY = null;
+    }
     this.controller.jumpOffset = 0;
     this.controller.verticalVelocity = 0;
     this.controller.isGrounded = true;
@@ -521,7 +529,8 @@ class FarmGame {
     if (!cfg) return;
     const arrival = this.mapManager.travelToMap(mapId);
     if (arrival) {
-      this.teleportPlayer(arrival);
+      const groundY = this.mapManager.getActiveGroundY();
+      this.teleportPlayer(arrival, groundY);
       this.mapSystem?.setDestination(mapId);
       this.ui.showToast(`✨ ${cfg.name} — ${cfg.subtitle}! Press [E] by the return portal to come back.`);
     }

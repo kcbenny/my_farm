@@ -13,6 +13,7 @@ export class AncientRuins {
   constructor(scene, getTerrainHeight) {
     this.scene = scene;
     this.time = 0;
+    this.groundY = 0;
     this.runePlatforms = [];
 
     const cfg = ADVENTURE_MAPS.ancientRuins;
@@ -25,7 +26,7 @@ export class AncientRuins {
 
     // Sand ground
     const ground = new THREE.Mesh(new THREE.CylinderGeometry(15, 15.5, 0.5, 32), m.sand);
-    ground.position.y = -0.15;
+    ground.position.y = -0.25;
     ground.receiveShadow = true;
     this.group.add(ground);
 
@@ -102,6 +103,7 @@ export class AncientRuins {
     }
 
     this.addReturnPortal(cfg);
+    this.getGroundY = () => this.groundY;
   }
 
   addReturnPortal(cfg) {

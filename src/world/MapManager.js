@@ -71,6 +71,12 @@ export class MapManager {
     return this.activeMapId !== null;
   }
 
+  getActiveGroundY() {
+    if (!this.activeMapId) return null;
+    const map = this.maps[this.activeMapId];
+    return map ? map.getGroundY() : 0;
+  }
+
   update(delta) {
     this.portalSystem.update(delta);
     if (this.activeMapId && this.maps[this.activeMapId]) {
