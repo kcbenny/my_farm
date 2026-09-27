@@ -246,9 +246,10 @@ export class MapSystem {
       });
     });
 
-    // Toggle Map with Key 'M'
+    // Toggle Map with Key 'M' (only on farm, NOT in adventure maps — MissionPanel uses M there)
     window.addEventListener('keydown', (e) => {
       if (e.key === 'm' || e.key === 'M') {
+        if (this.game?.mapManager?.isInAdventureMap()) return; // let MissionPanel handle it
         this.fullmapModal.classList.toggle('hidden');
       }
     });
