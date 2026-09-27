@@ -20,13 +20,19 @@ export class MissionPanel {
     this.allDone = false;
     this.onAllComplete = null;
     this._visible = false;
+  }
 
-    // M key toggles mission panel (Tab is eaten by browser pointer-lock)
-    this._onKey = (e) => {
-      if (e.target.closest('input, textarea, [contenteditable="true"]')) return;
-      if (e.key === 'm' || e.key === 'M') { e.preventDefault(); this._toggle(); }
-    };
-    window.addEventListener('keydown', this._onKey);
+  /** Public toggle — called by MapSystem when M is pressed in adventure maps */
+  toggle() {
+    if (this.missions.length === 0) return;
+    if (this._visible) {
+      this.container.classList.remove('visible');
+      this._visible = false;
+    } else {
+      this._renderContent(this._collectStatus());
+      this.container.classList.add('visible');
+      this._visible = true;
+    }
   }
 
   /**
@@ -110,20 +116,6 @@ export class MissionPanel {
     this._hints = [];
     this.allDone = false;
     this._visible = false;
-  }
-
-  /** Toggle mission panel visibility — rebuilds DOM on every show */
-  _toggle() {
-    if (this.missions.length === 0) return;
-    if (this._visible) {
-      this.container.classList.remove('visible');
-      this._visible = false;
-    } else {
-      // Rebuild content to guarantee hints are always present
-      this._renderContent(this._collectStatus());
-      this.container.classList.add('visible');
-      this._visible = true;
-    }
   }
 
   /** Collect current checkbox status for re-render */

@@ -153,10 +153,21 @@ class FarmGame {
       this.placementPointer.set((event.clientX - bounds.left) / bounds.width * 2 - 1, -(event.clientY - bounds.top) / bounds.height * 2 + 1);
     });
     window.addEventListener('keydown', event => {
-      if (event.repeat || event.target.closest('input, textarea, [contenteditable="true"]')) return;
+      const target = event.target;
+      const isEditing = target instanceof Element
+        && target.closest('input, textarea, [contenteditable="true"]');
+      if (event.repeat || isEditing) return;
       if (event.code === 'KeyB') this.kittyHome.setPlacementMode(!this.kittyHome.placementActive);
       if (event.code === 'Escape') this.kittyHome.setPlacementMode(false);
-    });
+      if (event.code === 'KeyM') {
+        event.preventDefault();
+        if (this.mapManager.isInAdventureMap()) {
+          this.missionPanel.toggle();
+        } else {
+          this.mapSystem?.toggleFullMap();
+        }
+      }
+    }, true);
 
     // Pests (respects terrain elevation & flying sky birds)
     this.pestSystem = new PestSystem(this.scene, getTerrainHeight);
