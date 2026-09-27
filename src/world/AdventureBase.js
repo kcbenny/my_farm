@@ -45,6 +45,9 @@ export class AdventureBase {
     this.group.position.copy(o);
     scene.add(this.group);
 
+    // ── Obstacle colliders (cylinder collision for adventure maps) ──
+    this.obstacleColliders = []; // {position: Vector3 (local), radius: float}
+
     // ── Shared materials (subclasses can override) ──
     this.sharedMats = {
       gemGlow: new THREE.MeshBasicMaterial({ color: cfg.color, transparent: true, opacity: 0.85 }),
@@ -53,6 +56,21 @@ export class AdventureBase {
     };
 
     this.getGroundY = () => this.groundY;
+  }
+
+  /* ──────────────── Obstacle Colliders ──────────────── */
+
+  /** Register a cylinder obstacle in local space */
+  addObstacleCollider(localPos, radius) {
+    this.obstacleColliders.push({ position: localPos.clone(), radius });
+  }
+
+  /** Return world-space obstacle colliders for physics system */
+  getObstacleColliders() {
+    return this.obstacleColliders.map(c => ({
+      position: c.position.clone().add(this.group.position),
+      radius: c.radius,
+    }));
   }
 
   /* ──────────────── Collectibles ──────────────── */

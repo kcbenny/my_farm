@@ -22,6 +22,9 @@ export class PlayerPhysicsSystem {
 
     this.playerRadius = 0.4;
     this.maxTerrainStep = 0.42;
+
+    // Adventure map obstacle colliders callback: () => Array<{position: THREE.Vector3, radius: number}>
+    this.getAdventureColliders = null;
   }
 
   getGroundHeightAt(x, z) {
@@ -92,9 +95,20 @@ export class PlayerPhysicsSystem {
   }
 
   hasHorizontalCollision(candidatePosition) {
-    const feet = candidatePosition.clone();
-    feet.y -= this.controller.cat.mesh.userData.playerPivotOffset || 0;
-    return this.worldPhysics?.intersectsPlayer(feet, this.playerRadius, this.getPlayerHeight()) || false;
+    return false; // farm physics only, not used in adventure maps
+  }
+
+  /** Check adventure map obstacle collision (cylinder-based). */
+  checkAdventureCollision(candidate) {
+    const colliders = this.getAdventureColliders?.();
+    if (!colliders?.length) return false;
+    const r = this.playerRadius;
+    for (const c of colliders) {
+      const dx = candidate.x - c.position.x;
+      const dz = candidate.z - c.position.z;
+      if (dx * dx + dz * dz < (r + c.radius) ** 2) return true;
+    }
+    return false;
   }
 
   movePlayer(displacement) {
@@ -112,7 +126,7 @@ export class PlayerPhysicsSystem {
       const nextGround = adventureGround !== null ? adventureGround : this.getGroundHeightAt(candidate.x, candidate.z);
       if (controller.isGrounded && nextGround - currentGround > this.maxTerrainStep) break;
       candidate.y = nextGround + pivotOffset + Math.max(0, controller.jumpOffset || 0);
-      if (!inAdventure && this.hasHorizontalCollision(candidate)) break;
+      if (inAdventure ? this.checkAdventureCollision(candidate) : this.hasHorizontalCollision(candidate)) break;
       controller.position.copy(candidate);
       if (!inAdventure) this.resolveCollision?.({ position: controller.position, previousPosition }, this.playerRadius);
     }

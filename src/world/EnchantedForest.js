@@ -108,6 +108,22 @@ export class EnchantedForest extends AdventureBase {
     this.spawnGems(fairyGems, 0.2);
 
     this.addReturnPortal(this.cfg, new THREE.Vector3(0, 0, -8));
+
+    // ── Register obstacle colliders ──
+    // 16 giant trees
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2;
+      const r = 13.5 + (i % 3) * 1.2;
+      this.addObstacleCollider(new THREE.Vector3(Math.sin(a) * r, 0, Math.cos(a) * r), 1.3);
+    }
+    // Central ancient stump
+    this.addObstacleCollider(new THREE.Vector3(0, 0, 0), 2.1);
+    // 10 mushrooms
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2;
+      const r = 5.5 + (i % 4) * 2;
+      this.addObstacleCollider(new THREE.Vector3(Math.sin(a) * r, 0, Math.cos(a) * r), 0.7);
+    }
   }
 
   makeTree(scale) {

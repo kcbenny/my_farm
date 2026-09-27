@@ -100,6 +100,18 @@ export class SnowyMountain extends AdventureBase {
     this.spawnGems(iceGems, 0.2);
 
     this.addReturnPortal(this.cfg, new THREE.Vector3(-5, 0, 7));
+
+    // ── Register obstacle colliders ──
+    // Central mountain peak (cone, effective radius at player height ~5m)
+    this.addObstacleCollider(new THREE.Vector3(0, 0, 0), 5.5);
+    // 10 ice crystal groups (only base crystals block movement)
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2;
+      const r = 7.5 + (i % 3) * 1.2;
+      this.addObstacleCollider(new THREE.Vector3(Math.sin(a) * r, 0, Math.cos(a) * r), 0.4);
+    }
+    // Snowman
+    this.addObstacleCollider(new THREE.Vector3(4, 0, 5), 0.6);
   }
 
   update(delta) {

@@ -170,6 +170,28 @@ export class AncientRuins extends AdventureBase {
 
     // ── Return portal ──
     this.addReturnPortal(this.cfg, new THREE.Vector3(-7, 0, -5));
+
+    // ── Register obstacle colliders ──
+    // 8 standing pillars
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2 + 0.3;
+      const radius = 12 + (i % 2) * 2;
+      const h = 4.5 + (i % 3) * 1.2;
+      this.addObstacleCollider(new THREE.Vector3(Math.sin(angle) * radius, 0, Math.cos(angle) * radius), 0.55);
+    }
+    // 5 fallen pillars
+    for (let i = 0; i < 5; i++) {
+      const angle = (i / 5) * Math.PI * 2 + 0.5;
+      const r = 9 + i * 0.8;
+      this.addObstacleCollider(new THREE.Vector3(Math.sin(angle) * r, 0, Math.cos(angle) * r), 0.7);
+    }
+    // Central altar
+    this.addObstacleCollider(new THREE.Vector3(0, 0, 0), 1.8);
+    // 6 rune platforms
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      this.addObstacleCollider(new THREE.Vector3(Math.sin(a) * 7, 0, Math.cos(a) * 7), 0.85);
+    }
   }
 
   /* ──── Puzzle: step on rune platforms in correct order ──── */

@@ -162,6 +162,8 @@ class FarmGame {
       resolveCollision,
       worldPhysics: this.farm.physics,
     });
+    // Wire adventure map obstacle colliders into physics
+    this.playerPhysics.getAdventureColliders = () => this.mapManager.getActiveMap()?.getObstacleColliders() || [];
 
     // Map System (Minimap HUD & Full World Map with Path Navigation)
     this.mapSystem = new MapSystem(this);

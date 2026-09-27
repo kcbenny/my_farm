@@ -140,6 +140,29 @@ export class HarvestMaze extends AdventureBase {
     this.spawnGems(punkPositions, 0.25);
 
     this.addReturnPortal(this.cfg, new THREE.Vector3(-5, 0, -5));
+
+    // ── Register obstacle colliders ──
+    // Corn maze walls — break long walls into cylinder segments every ~1.6 units
+    for (const [cx, cz, w, d] of mazeLayout) {
+      const long = Math.max(w, d);
+      const short = Math.min(w, d);
+      const segs = Math.max(1, Math.ceil(long / 1.6));
+      const segR = short / 2 + 0.45;
+      for (let s = 0; s < segs; s++) {
+        const t = segs === 1 ? 0.5 : s / (segs - 1);
+        const sx = cx + (w > d ? (t - 0.5) * w : 0);
+        const sz = cz + (d > w ? (t - 0.5) * d : 0);
+        this.addObstacleCollider(new THREE.Vector3(sx, 0, sz), segR);
+      }
+    }
+    // 4 apple trees
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + 0.3;
+      const r = 11;
+      this.addObstacleCollider(new THREE.Vector3(Math.sin(a) * r, 0, Math.cos(a) * r), 0.9);
+    }
+    // Scarecrow
+    this.addObstacleCollider(new THREE.Vector3(0, 0, 3), 0.6);
   }
 
   update(delta) {

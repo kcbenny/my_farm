@@ -94,6 +94,13 @@ export class StarryMeadow extends AdventureBase {
     this.spawnGems(starGems, 0.2);
 
     this.addReturnPortal(this.cfg, new THREE.Vector3(0, 0, 8));
+
+    // ── Register obstacle colliders ──
+    // 8 constellation stones
+    const stonePts = [[-3, -4], [0, -6], [3, -4], [-2, 0], [2, 0], [-4, 4], [0, 2], [4, 4]];
+    stonePts.forEach(([cx, cz]) => {
+      this.addObstacleCollider(new THREE.Vector3(cx, 0, cz), 0.5);
+    });
   }
 
   update(delta) {

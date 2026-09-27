@@ -116,6 +116,17 @@ export class MysticLake extends AdventureBase {
     this.spawnGems(pearlPositions, 0.18);
 
     this.addReturnPortal(this.cfg, new THREE.Vector3(6, 0, -7));
+
+    // ── Register obstacle colliders ──
+    // 8 willow trees
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      const r = 13.5;
+      this.addObstacleCollider(new THREE.Vector3(Math.sin(a) * r, 0, Math.cos(a) * r), 0.9);
+    }
+    // Dock (approximate as 2 cylinders)
+    this.addObstacleCollider(new THREE.Vector3(0, 0, 7.5), 0.8);
+    this.addObstacleCollider(new THREE.Vector3(0, 0, 9.2), 0.8);
   }
 
   update(delta) {
