@@ -1,0 +1,101 @@
+/* ── MissionPanel.css ── */
+.mission-panel {
+  position: fixed;
+  top: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+.mission-panel.visible {
+  opacity: 1;
+}
+.mission-panel-inner {
+  background: rgba(20, 20, 40, 0.88);
+  backdrop-filter: blur(10px);
+  border: 1.5px solid rgba(255, 255, 255, 0.18);
+  border-radius: 16px;
+  padding: 16px 22px;
+  min-width: 300px;
+  max-width: 420px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+}
+.mission-panel.completed .mission-panel-inner {
+  border-color: rgba(255, 215, 0, 0.65);
+  box-shadow: 0 8px 32px rgba(255, 215, 0, 0.25);
+}
+.mission-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.4px;
+}
+.mission-panel-header .icon { font-size: 20px; }
+.mission-panel-header.completed { color: #ffd700; }
+
+.mission-list { list-style: none; padding: 0; margin: 0; }
+.mission-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 13px;
+  color: #ccc;
+  transition: color 0.3s;
+}
+.mission-item .checkbox {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1.5px solid #777;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: transparent;
+  flex-shrink: 0;
+  transition: all 0.25s;
+}
+.mission-item.done { color: #7ecca8; }
+.mission-item.done .checkbox {
+  border-color: #4caf84;
+  background: #2d7a55;
+  color: #fff;
+}
+.mission-item.flash {
+  animation: missionFlash 0.55s ease-out;
+}
+@keyframes missionFlash {
+  0% { color: #ffd700; transform: scale(1.06); }
+  100% { color: #7ecca8; transform: scale(1); }
+}
+.mission-item .bonus {
+  margin-left: auto;
+  font-size: 11px;
+  color: #ffd700;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.mission-item.done .bonus { opacity: 1; }
+
+.mission-complete-badge {
+  text-align: center;
+  margin-top: 10px;
+  font-size: 13px;
+  color: #ffd700;
+  font-weight: 700;
+  animation: badgePulse 1.2s ease-in-out infinite;
+  display: none;
+}
+.mission-panel.completed .mission-complete-badge { display: block; }
+@keyframes badgePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}

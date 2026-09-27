@@ -19,6 +19,7 @@ import { GLTFExportManager } from './gameplay/GLTFExportManager.js';
 import { normalizeAsset } from './gameplay/WorldPhysics.js';
 import { SecretFishingSpot } from './world/SecretFishingSpot.js';
 import { MapManager } from './world/MapManager.js';
+import { MissionPanel } from './ui/MissionPanel.js';
 
 class FarmGame {
   constructor() {
@@ -78,6 +79,15 @@ class FarmGame {
     this.ui = new UIManager(this);
     this.ui.setLoadingProgress(15);
 
+    // Mission Panel — adventure map quest display
+    this.missionPanel = new MissionPanel();
+    this.missionPanel.onAllComplete = (mapName) => {
+      this.sound.playQuestComplete();
+      this.coins += 25;
+      this.ui.updateStats(this.coins, this.cropsHarvested, this.pestsDefeated, this.shop ? this.shop.diamonds : 0);
+      this.ui.showToast(`🏆 ${mapName} 全部任務完成！+25🪙`);
+    };
+
     // Sound System
     this.sound = new SoundSystem();
     this.ui.setLoadingProgress(30);
@@ -94,6 +104,15 @@ class FarmGame {
     const resolveCollision = (pos, radius) => this.farm.resolveCollision(pos, radius);
     this.secretFishingSpot = new SecretFishingSpot(this.scene, getTerrainHeight);
     this.mapManager = new MapManager(this.scene, getTerrainHeight);
+    this.mapManager.onEnterMap = (mapName, missions, status) => {
+      this.missionPanel.show(mapName, missions, status);
+    };
+    this.mapManager.onLeaveMap = () => {
+      this.missionPanel.hide();
+    };
+    this.mapManager.onCollect = (pos, collected, total) => {
+      this.ui.showToast(`💎 ${collected}/${total} treasures found!`);
+    };
 
     // Determine active character (default to Cozy low-poly kitty)
     let initialCharId = 'cozy';
@@ -592,9 +611,87 @@ class FarmGame {
     this.farm.physics.update();
     this.playerPhysics.updatePlayerPhysics(delta);
 
-    // Adventure map interactions (collectibles, puzzles)
+    // Adventure map interactions (collectibles, puzzles, all game-specific)
     if (this.mapManager.isInAdventureMap()) {
-      this.mapManager.checkMapInteractions(this.controller.position);
+      const result = this.mapManager.checkMapInteractions(this.controller.position);
+      if (result && result.data) {
+        const d = result.data;
+
+        // Mission progress update
+        if (d.missions && this.missionPanel) {
+          for (const [id, done] of Object.entries(d.missions)) {
+            if (done) this.missionPanel.completeMission(id);
+          }
+        }
+
+        // Ancient Ruins: quicksand slowdown
+        if (d.slowdown !== undefined && d.slowdown < 1.0) {
+          this.controller._qsSlow = d.slowdown;
+        } else {
+          this.controller._qsSlow = 1.0;
+        }
+
+        // Ancient Ruins: golem knockback
+        if (d.golem && d.golem.knockback) {
+          this.controller.position.add(d.golem.knockback);
+          this.controller.jumpOffset = Math.max(this.controller.jumpOffset, 2);
+        }
+
+        // Ancient Ruins: scorpion hit
+        if (d.scorpionHit) {
+          this.cat.boostMood(-10);
+          this.ui.showToast('🦂 Ouch! A scorpion stung you!');
+        }
+
+        // Harvest Maze: pumpkin king
+        if (d.king) {
+          if (d.king.defeated) {
+            this.ui.showToast('🎃💥 Pumpkin King defeated! +Loot!');
+          } else if (d.king.hit) {
+            this.ui.showToast(`🎃 Pumpkin King hit! ${d.king.hp} HP remaining!`);
+          } else if (d.king.playerHit) {
+            this.controller.jumpOffset = Math.max(this.controller.jumpOffset, 1.5);
+          }
+        }
+
+        // Enchanted Forest: bounce mushroom
+        if (d.bounceMushroom) {
+          this.controller.verticalVelocity = Math.max(this.controller.verticalVelocity || 0, d.bounceMushroom.power);
+          this.controller.isGrounded = false;
+        }
+
+        // Enchanted Forest: treehole teleport
+        if (d.treehole && d.treehole.teleportTo) {
+          const tp = d.treehole.teleportTo;
+          const abs = tp.clone().add(this.mapManager.getActiveMap().group.position);
+          this.controller.position.x = abs.x;
+          this.controller.position.z = abs.z;
+          this.controller.position.y = 0.5;
+        }
+
+        // Snowy Mountain: avalanche hit
+        if (d.avalancheHit) {
+          this.controller.jumpOffset = Math.max(this.controller.jumpOffset, 1.5);
+          this.ui.showToast('❄️ Avalanche! Take cover behind ice crystals!');
+        }
+
+        // Mystic Lake: boat boarding
+        if (d.boatBoard) {
+          this.ui.showToast('🚣 You board the rowboat! Sail the lake!');
+        }
+
+        // Mystic Lake: fishing
+        if (d.fishing && d.fishing.started) {
+          this.ui.showToast('🎣 Casting line... Wait for a bite!');
+        }
+        if (d.fishCaught) {
+          this.fishCaught = (this.fishCaught || 0) + 1;
+          this.coins += 10;
+          this.ui.showToast(`🐟 Fish caught! +10🪙 (${this.fishCaught || 0} total)`);
+        }
+      }
+    } else {
+      this.controller._qsSlow = 1.0;
     }
 
     this.kittyHome.updatePlacement(this.camera, document.pointerLockElement ? new THREE.Vector2() : this.placementPointer);

@@ -98,15 +98,26 @@ export class PlayerPhysicsSystem {
     return false; // farm physics only, not used in adventure maps
   }
 
-  /** Check adventure map obstacle collision (cylinder-based). */
+  /** Check adventure map obstacle collision (cylinder-based).
+   *  If already overlapping an obstacle, allow movement that increases
+   *  distance from that obstacle's centre (escape). */
   checkAdventureCollision(candidate) {
     const colliders = this.getAdventureColliders?.();
     if (!colliders?.length) return false;
     const r = this.playerRadius;
+    const cur = this.controller.position;
     for (const c of colliders) {
       const dx = candidate.x - c.position.x;
       const dz = candidate.z - c.position.z;
-      if (dx * dx + dz * dz < (r + c.radius) ** 2) return true;
+      const distSq = dx * dx + dz * dz;
+      const limit = r + c.radius;
+      if (distSq < limit * limit) {
+        const prevDx = cur.x - c.position.x;
+        const prevDz = cur.z - c.position.z;
+        const prevDistSq = prevDx * prevDx + prevDz * prevDz;
+        if (prevDistSq <= distSq) continue; // moving away — allow escape
+        return true; // moving deeper — block
+      }
     }
     return false;
   }

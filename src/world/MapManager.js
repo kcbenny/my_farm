@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { PortalSystem, ADVENTURE_MAPS } from './PortalSystem.js';
 import { EnchantedForest } from './EnchantedForest.js';
 import { AncientRuins } from './AncientRuins.js';
@@ -26,6 +27,10 @@ export class MapManager {
 
     /** Callback: (pos: Vector3, collected: number, total: number) => void */
     this.onCollect = null;
+    /** Callback: (mapName: string, missions: [], status: {}) => void */
+    this.onEnterMap = null;
+    /** Callback: () => void */
+    this.onLeaveMap = null;
   }
 
   getActiveMap() {
@@ -62,6 +67,13 @@ export class MapManager {
     }
 
     this.activeMapId = mapId;
+    // Fire mission panel
+    const map = this.maps[mapId];
+    if (this.onEnterMap && map.getMissions) {
+      const missions = map.getMissions();
+      const status = map.checkMissionStatus ? map.checkMissionStatus() : {};
+      this.onEnterMap(cfg.name, missions, status);
+    }
     return cfg.mapArrival.clone();
   }
 
@@ -69,6 +81,7 @@ export class MapManager {
     if (!this.activeMapId) return null;
     const cfg = ADVENTURE_MAPS[this.activeMapId];
     this.activeMapId = null;
+    if (this.onLeaveMap) this.onLeaveMap();
     return cfg.farmArrival.clone();
   }
 
@@ -82,25 +95,65 @@ export class MapManager {
     return map ? map.getGroundY() : 0;
   }
 
-  /** Check collectibles + puzzle for the active map */
+  /** Check ALL interactions for the active map */
   checkMapInteractions(playerPos) {
-    if (!this.activeMapId) return false;
+    if (!this.activeMapId) return { interacted: false };
     const map = this.maps[this.activeMapId];
-    if (!map) return false;
+    if (!map) return { interacted: false };
 
-    let interacted = false;
+    const result = { interacted: false, data: {} };
 
-    // Collectible gems
-    if (map.checkCollect) {
-      if (map.checkCollect(playerPos)) interacted = true;
+    // Gem collection
+    if (map.checkCollect && map.checkCollect(playerPos)) {
+      result.interacted = true;
     }
 
-    // Ancient Ruins rune puzzle
-    if (map.checkRunePuzzle) {
-      if (map.checkRunePuzzle(playerPos)) interacted = true;
+    // Ancient Ruins specific
+    if (map.checkRunePuzzle && map.checkRunePuzzle(playerPos)) { result.interacted = true; }
+    if (map.tryClearChamber && map.tryClearChamber(playerPos)) { result.interacted = true; }
+    if (map.checkQuicksand && map.checkQuicksand(playerPos)) { result.data.quicksand = true; result.interacted = true; }
+    if (map.getQuicksandSlowdown) { result.data.slowdown = map.getQuicksandSlowdown(playerPos); }
+    if (map.updateGolem) { result.data.golem = map.updateGolem(0.016, playerPos); }
+    if (map.checkScorpionHit) {
+      const p2 = new THREE.Vector2 ? true : false;
+      result.data.scorpionHit = map.checkScorpionHit ? map.checkScorpionHit(new (playerPos.constructor)(playerPos.x, playerPos.z)) : false;
     }
 
-    return interacted;
+    // Harvest Maze specific
+    if (map.tryLightLantern && map.tryLightLantern(playerPos)) { result.interacted = true; }
+    if (map.tryAppleBobbing && map.tryAppleBobbing(playerPos)) { result.interacted = true; }
+    if (map.updateKing) { result.data.king = map.updateKing(0.016, playerPos); }
+
+    // Enchanted Forest specific
+    if (map.checkBounceMushroom) { result.data.bounceMushroom = map.checkBounceMushroom(playerPos); }
+    if (map.checkCanopyPlatform) { map.checkCanopyPlatform(playerPos); }
+    if (map.tryCaptureFirefly && map.tryCaptureFirefly(playerPos)) { result.interacted = true; }
+    if (map.checkTreehole) { result.data.treehole = map.checkTreehole(playerPos); }
+
+    // Snowy Mountain specific
+    if (map.isOnIceSheet) { result.data.onIce = map.isOnIceSheet(playerPos); }
+    if (map.checkPeakTop && map.checkPeakTop(playerPos)) { result.interacted = true; }
+    if (map.tryCompleteSnowman && map.tryCompleteSnowman(playerPos)) { result.interacted = true; }
+    if (map.updateAvalanche) { result.data.avalancheHit = map.updateAvalanche(0.016, playerPos); }
+
+    // Mystic Lake specific
+    if (map.checkFrogInteraction && map.checkFrogInteraction(playerPos)) { result.interacted = true; }
+    if (map.checkVortexEntry && map.checkVortexEntry(playerPos)) { result.interacted = true; }
+    if (map.boardBoat) { result.data.boatBoard = map.boardBoat(playerPos); }
+    if (map.startFishing) { result.data.fishing = map.startFishing(); }
+    if (map.checkFishCatch) { result.data.fishCaught = map.checkFishCatch(); }
+
+    // Starry Meadow specific
+    if (map.checkConstellation && map.checkConstellation(playerPos)) { result.interacted = true; }
+    if (map.checkHengeAltar && map.checkHengeAltar(playerPos)) { result.interacted = true; }
+    if (map.checkShootingStarWish && map.checkShootingStarWish()) { result.interacted = true; }
+
+    // Mission status update every frame
+    if (map.checkMissionStatus) {
+      result.data.missions = map.checkMissionStatus();
+    }
+
+    return result;
   }
 
   getActiveMapProgress() {

@@ -2,7 +2,8 @@ import * as THREE from 'three';
 
 /**
  * Base class for all adventure maps.
- * Provides: collectible gems, score tracking, return portal, particle bursts.
+ * Provides: collectible gems, score tracking, return portal, particle bursts,
+ * mission system hooks.
  *
  * Performance rules (MUST follow):
  * - Max 1 atmospheric PointLight per map (plus return portal light = 2 total)
@@ -22,12 +23,14 @@ export class AdventureBase {
    * @param {string} cfg.name
    * @param {number} cfg.color - hex colour for gems / portal
    * @param {THREE.Vector3} cfg.mapOffset
+   * @param {number} [mapRadius=30] - ground radius (default 30, was 15)
    */
-  constructor(scene, cfg) {
+  constructor(scene, cfg, mapRadius = 30) {
     this.scene = scene;
     this.time = 0;
     this.groundY = 0;
     this.cfg = cfg;
+    this.mapRadius = mapRadius;
 
     // ── Collectible system ──
     this.collectibles = [];
@@ -58,6 +61,20 @@ export class AdventureBase {
     this.getGroundY = () => this.groundY;
   }
 
+  /* ──────────────── Mission System Hooks ──────────────── */
+
+  /**
+   * Override in subclass to define missions.
+   * @returns {{id:string, text:string}[]}
+   */
+  getMissions() { return []; }
+
+  /**
+   * Override in subclass to check mission progress.
+   * @returns {Object<string, boolean>} map of missionId -> isComplete
+   */
+  checkMissionStatus() { return {}; }
+
   /* ──────────────── Obstacle Colliders ──────────────── */
 
   /** Register a cylinder obstacle in local space */
@@ -81,12 +98,12 @@ export class AdventureBase {
    * @param {number} [radius=0.22]
    */
   spawnGems(positions, radius = 0.22) {
-    this.total = positions.length;
+    this.total += positions.length;
     const geo = new THREE.DodecahedronGeometry(radius, 0);
     positions.forEach((pos, i) => {
       const gem = new THREE.Mesh(geo, this.sharedMats.gemGlow.clone());
       gem.position.copy(pos);
-      gem.userData = { collected: false, index: i, baseY: pos.y };
+      gem.userData = { collected: false, index: this.collectibles.length + i, baseY: pos.y };
       this.group.add(gem);
       this.collectibles.push(gem);
     });
@@ -102,7 +119,6 @@ export class AdventureBase {
     for (const gem of this.collectibles) {
       if (gem.userData.collected) continue;
       if (playerPos.distanceToSquared(gem.position) < 2.25) {
-        // radius = 1.5
         gem.userData.collected = true;
         gem.visible = false;
         this.collected++;
@@ -154,7 +170,7 @@ export class AdventureBase {
       }
       const t = p.userData.age / p.userData.life;
       p.position.addScaledVector(p.userData.dir, p.userData.speed * delta);
-      p.userData.dir.y += delta * 0.6; // gravity
+      p.userData.dir.y += delta * 0.6;
       p.material.opacity = 0.9 * (1 - t);
       p.scale.setScalar(1 - t * 0.6);
     }
@@ -198,17 +214,14 @@ export class AdventureBase {
   update(delta) {
     this.time += delta;
 
-    // Spin & bob collectible gems
     for (const gem of this.collectibles) {
       if (gem.userData.collected) continue;
       gem.rotation.y += delta * 2.2;
       gem.position.y = gem.userData.baseY + Math.sin(this.time * 3 + gem.userData.index) * 0.12;
     }
 
-    // Particle bursts
     this.updateBursts(delta);
 
-    // Return portal spin
     if (this.returnRing) {
       this.returnRing.rotation.z = this.time * 0.8;
       this.returnRing.scale.setScalar(1 + Math.sin(this.time * 2) * 0.04);

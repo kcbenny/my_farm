@@ -33,7 +33,7 @@ export const ADVENTURE_MAPS = {
     color: 0x7b2fbe,
     farmPortalPos: new THREE.Vector3(38, 0, -22),
     mapOffset: new THREE.Vector3(220, 0, 0),
-    mapArrival: new THREE.Vector3(220, 0, 6),
+    mapArrival: new THREE.Vector3(220, 0, -3),  // safe — clear of mushrooms
     farmArrival: new THREE.Vector3(38, 0, -20),
   },
   ancientRuins: {
