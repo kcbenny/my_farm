@@ -93,7 +93,7 @@ export class StarryMeadow extends AdventureBase {
     }
     this.spawnGems(starGems, 0.2);
 
-    this.addReturnPortal(cfg, new THREE.Vector3(0, 0, 8));
+    this.addReturnPortal(this.cfg, new THREE.Vector3(0, 0, 8));
   }
 
   update(delta) {

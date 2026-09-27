@@ -107,7 +107,7 @@ export class EnchantedForest extends AdventureBase {
     }
     this.spawnGems(fairyGems, 0.2);
 
-    this.addReturnPortal(cfg, new THREE.Vector3(0, 0, -8));
+    this.addReturnPortal(this.cfg, new THREE.Vector3(0, 0, -8));
   }
 
   makeTree(scale) {

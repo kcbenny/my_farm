@@ -169,7 +169,7 @@ export class AncientRuins extends AdventureBase {
     this.spawnGems(gemPositions, 0.22);
 
     // ── Return portal ──
-    this.addReturnPortal(cfg, new THREE.Vector3(-7, 0, -5));
+    this.addReturnPortal(this.cfg, new THREE.Vector3(-7, 0, -5));
   }
 
   /* ──── Puzzle: step on rune platforms in correct order ──── */

@@ -139,7 +139,7 @@ export class HarvestMaze extends AdventureBase {
     }
     this.spawnGems(punkPositions, 0.25);
 
-    this.addReturnPortal(cfg, new THREE.Vector3(-5, 0, -5));
+    this.addReturnPortal(this.cfg, new THREE.Vector3(-5, 0, -5));
   }
 
   update(delta) {

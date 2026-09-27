@@ -115,7 +115,7 @@ export class MysticLake extends AdventureBase {
     }
     this.spawnGems(pearlPositions, 0.18);
 
-    this.addReturnPortal(cfg, new THREE.Vector3(6, 0, -7));
+    this.addReturnPortal(this.cfg, new THREE.Vector3(6, 0, -7));
   }
 
   update(delta) {

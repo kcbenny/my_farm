@@ -99,7 +99,7 @@ export class SnowyMountain extends AdventureBase {
     }
     this.spawnGems(iceGems, 0.2);
 
-    this.addReturnPortal(cfg, new THREE.Vector3(-5, 0, 7));
+    this.addReturnPortal(this.cfg, new THREE.Vector3(-5, 0, 7));
   }
 
   update(delta) {
