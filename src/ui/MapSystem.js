@@ -43,11 +43,16 @@ export class MapSystem {
     minimapDiv.innerHTML = `
       <div class="minimap-header">
         <span class="minimap-title">🧭 MAP</span>
-        <button id="btn-expand-map" class="minimap-expand-btn">🔍</button>
+        <div class="minimap-header-actions">
+          <button id="btn-toggle-minimap" class="minimap-toggle-btn" title="Hide Map">👁</button>
+          <button id="btn-expand-map" class="minimap-expand-btn">🔍</button>
+        </div>
       </div>
-      <canvas id="minimap-canvas" width="160" height="160"></canvas>
-      <div class="minimap-footer">
-        <span id="minimap-target-label">Target: 🛒 Shop</span>
+      <div class="minimap-body">
+        <canvas id="minimap-canvas" width="160" height="160"></canvas>
+        <div class="minimap-footer">
+          <span id="minimap-target-label">Target: 🛒 Shop</span>
+        </div>
       </div>
     `;
 
@@ -189,10 +194,23 @@ export class MapSystem {
   }
 
   setupEventListeners() {
-    // Open full map on clicking minimap
+    // Minimap collapse/expand toggle
+    const toggleBtn = document.getElementById('btn-toggle-minimap');
     const minimapDiv = document.getElementById('minimap-container');
+    if (toggleBtn && minimapDiv) {
+      toggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation(); // Don't open full map when toggling
+        this.toggleMinimap();
+      });
+    }
+
+    // Open full map on clicking minimap (only when expanded)
     if (minimapDiv) {
       minimapDiv.addEventListener('click', () => {
+        if (minimapDiv.classList.contains('minimap-collapsed')) {
+          this.toggleMinimap(); // click collapsed pill → expand
+          return;
+        }
         this.fullmapModal.classList.remove('hidden');
       });
     }
@@ -234,6 +252,15 @@ export class MapSystem {
         this.fullmapModal.classList.toggle('hidden');
       }
     });
+  }
+
+  toggleMinimap() {
+    const minimapDiv = document.getElementById('minimap-container');
+    const toggleBtn = document.getElementById('btn-toggle-minimap');
+    if (!minimapDiv) return;
+    const collapsed = minimapDiv.classList.toggle('minimap-collapsed');
+    if (toggleBtn) toggleBtn.textContent = collapsed ? '👁‍🗨' : '👁';
+    if (toggleBtn) toggleBtn.title = collapsed ? 'Show Map' : 'Hide Map';
   }
 
   setDestination(key) {

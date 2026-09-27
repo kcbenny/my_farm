@@ -72,7 +72,8 @@ export class MapManager {
     if (this.onEnterMap && map.getMissions) {
       const missions = map.getMissions();
       const status = map.checkMissionStatus ? map.checkMissionStatus() : {};
-      this.onEnterMap(cfg.name, missions, status);
+      const hints = map.getHints ? map.getHints() : [];
+      this.onEnterMap(cfg.name, missions, status, hints);
     }
     return cfg.mapArrival.clone();
   }
@@ -115,8 +116,7 @@ export class MapManager {
     if (map.getQuicksandSlowdown) { result.data.slowdown = map.getQuicksandSlowdown(playerPos); }
     if (map.updateGolem) { result.data.golem = map.updateGolem(0.016, playerPos); }
     if (map.checkScorpionHit) {
-      const p2 = new THREE.Vector2 ? true : false;
-      result.data.scorpionHit = map.checkScorpionHit ? map.checkScorpionHit(new (playerPos.constructor)(playerPos.x, playerPos.z)) : false;
+      result.data.scorpionHit = map.checkScorpionHit(new THREE.Vector2(playerPos.x, playerPos.z));
     }
 
     // Harvest Maze specific

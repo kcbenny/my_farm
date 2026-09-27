@@ -104,8 +104,11 @@ class FarmGame {
     const resolveCollision = (pos, radius) => this.farm.resolveCollision(pos, radius);
     this.secretFishingSpot = new SecretFishingSpot(this.scene, getTerrainHeight);
     this.mapManager = new MapManager(this.scene, getTerrainHeight);
-    this.mapManager.onEnterMap = (mapName, missions, status) => {
-      this.missionPanel.show(mapName, missions, status);
+    this.mapManager.onEnterMap = (mapName, missions, status, hints) => {
+      this.missionPanel.show(mapName, missions, status, hints);
+      // Flash a welcome toast summarising key controls
+      const totalGems = missions.find(m => m.id === 'gems')?.text || '';
+      this.ui.showToast(`🗺️ ${mapName} — 收集寶藏 · 完成任務 · 按 [Tab] 查看提示`);
     };
     this.mapManager.onLeaveMap = () => {
       this.missionPanel.hide();

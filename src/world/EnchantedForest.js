@@ -44,6 +44,16 @@ export class EnchantedForest extends AdventureBase {
     ];
   }
   getMissions() { return this._missions; }
+  getHints() {
+    return [
+      '🏃 走過仙子粉塵即可自動收集',
+      '🧚 跟隨閃爍的仙子飛行找到蘑菇圈',
+      '🍄 踩上紅色大蘑菇可彈跳到樹冠平台',
+      '🕳️ 走近發光的樹洞會被傳送到秘密區域',
+      '✨ 追逐金色螢火蟲碰觸即可捕捉',
+      '🔮 找到傳送門按 [E] 即可返回農場',
+    ];
+  }
   checkMissionStatus() {
     return {
       gems: this.collected >= 16,

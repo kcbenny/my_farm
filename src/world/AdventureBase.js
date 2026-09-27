@@ -75,6 +75,12 @@ export class AdventureBase {
    */
   checkMissionStatus() { return {}; }
 
+  /**
+   * Override in subclass to provide gameplay hints for this map.
+   * @returns {string[]} array of hint strings shown below the mission list
+   */
+  getHints() { return []; }
+
   /* ──────────────── Obstacle Colliders ──────────────── */
 
   /** Register a cylinder obstacle in local space */

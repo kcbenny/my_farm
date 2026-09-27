@@ -14,6 +14,13 @@ export class MissionPanel {
     this.mapName = '';
     this.allDone = false;
     this.onAllComplete = null;
+    this._visible = false;
+
+    // Tab key toggles mission panel
+    this._onKey = (e) => {
+      if (e.key === 'Tab') { e.preventDefault(); this._toggle(); }
+    };
+    window.addEventListener('keydown', this._onKey);
   }
 
   /**
@@ -21,7 +28,7 @@ export class MissionPanel {
    * @param {{id:string, text:string}[]} missions
    * @param {Object<string,boolean>} [initialStatus]
    */
-  show(mapName, missions, initialStatus = {}) {
+  show(mapName, missions, initialStatus = {}, hints = []) {
     this.mapName = mapName;
     this.missions = missions;
     this.allDone = false;
@@ -45,7 +52,29 @@ export class MissionPanel {
       list.appendChild(li);
     });
 
+    // ── Hints section ──
+    const hintSection = this.container.querySelector('.mission-hints');
+    if (hints && hints.length > 0) {
+      if (!hintSection) {
+        const hs = document.createElement('div');
+        hs.className = 'mission-hints';
+        hs.innerHTML = '<div class="mission-hints-title">💡 How to Play</div><ul class="hints-list"></ul>';
+        this.container.querySelector('.mission-panel-inner').appendChild(hs);
+      }
+      const ul = this.container.querySelector('.hints-list');
+      ul.innerHTML = '';
+      hints.forEach(h => {
+        const li = document.createElement('li');
+        li.textContent = h;
+        ul.appendChild(li);
+      });
+      this.container.querySelector('.mission-hints').style.display = 'block';
+    } else if (hintSection) {
+      hintSection.style.display = 'none';
+    }
+
     this.container.classList.add('visible');
+    this._visible = true;
     this.container.classList.remove('completed');
     this.container.querySelector('.mission-complete-badge').style.display = 'none';
   }
@@ -75,6 +104,19 @@ export class MissionPanel {
     this.container.classList.remove('visible', 'completed');
     this.missions = [];
     this.allDone = false;
+    this._visible = false;
+  }
+
+  /** Toggle mission panel visibility (Tab key) */
+  _toggle() {
+    if (this.missions.length === 0) return;
+    if (this._visible) {
+      this.container.classList.remove('visible');
+      this._visible = false;
+    } else {
+      this.container.classList.add('visible');
+      this._visible = true;
+    }
   }
 
   /** Update progress text for a mission (e.g. "(3/5)") */

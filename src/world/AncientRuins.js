@@ -54,6 +54,17 @@ export class AncientRuins extends AdventureBase {
     ];
   }
   getMissions() { return this._missions; }
+  getHints() {
+    return [
+      '🏃 走過金色聖甲蟲即可自動收集',
+      '🧩 依序踩踏 6 個發光符文平台解鎖封印',
+      '🗿 踩錯符文會召喚沙蠍追逐你！',
+      '🏚️ 靠近碎石堆按 [E] 清除進入隱藏密室',
+      '⚠️ 避開深色流沙區域！踩入會減速',
+      '⚔️ 解謎完成後 Golem 甦醒，引它撞柱 4 次即可封印',
+      '🔮 找到傳送門按 [E] 即可返回農場',
+    ];
+  }
   checkMissionStatus() {
     return {
       gems: this.collected >= 18,

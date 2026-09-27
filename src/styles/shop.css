@@ -268,12 +268,52 @@
   overflow: hidden;
   z-index: 80;
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, width 0.25s ease;
 }
 
 .minimap-container:hover {
   transform: scale(1.04);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+}
+
+/* Collapsed minimap — slides to top-right as a tiny pill, clears quest banner */
+.minimap-container.minimap-collapsed {
+  left: auto;
+  right: 12px;
+  width: auto;
+  cursor: pointer;
+  user-select: none;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(6px);
+  border: 2px solid rgba(82, 183, 136, 0.45);
+  border-radius: var(--radius-full);
+}
+
+.minimap-container.minimap-collapsed:hover {
+  transform: scale(1.08);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+  border-color: rgba(82, 183, 136, 0.85);
+}
+
+.minimap-container.minimap-collapsed .minimap-header {
+  background: transparent;
+  padding: 4px 10px;
+}
+
+.minimap-container.minimap-collapsed .minimap-title {
+  display: none;
+}
+
+.minimap-container.minimap-collapsed .minimap-expand-btn {
+  display: none;
+}
+
+.minimap-container.minimap-collapsed .minimap-toggle-btn {
+  font-size: 1rem;
+}
+
+.minimap-container.minimap-collapsed .minimap-body {
+  display: none;
 }
 
 .minimap-header {
@@ -285,6 +325,28 @@
   padding: 4px 10px;
   font-family: var(--font-heading);
   font-size: 0.8rem;
+}
+
+.minimap-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.minimap-toggle-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+
+.minimap-toggle-btn:hover {
+  color: #fff;
+  transform: scale(1.2);
 }
 
 .minimap-expand-btn {

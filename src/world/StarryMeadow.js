@@ -45,6 +45,17 @@ export class StarryMeadow extends AdventureBase {
     ];
   }
   getMissions() { return this._missions; }
+  getHints() {
+    return [
+      '🏃 走過星之碎片即可自動收集',
+      '🌠 走到發光的星座石按 [E] 開始連線，依次走到下一個',
+      '🌠 完成連線後天空會浮現星座 + 流星雨！',
+      '⭐ 流星劃過時快速按 [E] 許願拿獎勵',
+      '🪨 探索地圖中央的巨石陣尋找隱藏祭壇',
+      '💫 每 90 秒螢火蟲聚集巨石陣，收集品 ×2',
+      '🔮 找到傳送門按 [E] 即可返回農場',
+    ];
+  }
   checkMissionStatus() {
     return {
       gems: this.collected >= 14,

@@ -42,6 +42,16 @@ export class SnowyMountain extends AdventureBase {
     ];
   }
   getMissions() { return this._missions; }
+  getHints() {
+    return [
+      '🏃 走過冰晶寶石即可自動收集',
+      '🏔️ 沿螺旋步道繞山而上登頂',
+      '⛸️ 冰面上移動會滑行，撞破冰牆發現秘密',
+      '⛄ 收集散落的雪球＋紅蘿蔔完成雪人',
+      '❄️ 雪崩警報響起時躲到冰晶柱後方避難',
+      '🔮 找到傳送門按 [E] 即可返回農場',
+    ];
+  }
   checkMissionStatus() {
     return {
       gems: this.collected >= 14,

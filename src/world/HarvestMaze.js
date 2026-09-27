@@ -54,6 +54,17 @@ export class HarvestMaze extends AdventureBase {
     ];
   }
   getMissions() { return this._missions; }
+  getHints() {
+    return [
+      '🏃 走過南瓜寶石即可自動收集',
+      '🎃 走近南瓜燈籠按 [E] 點亮',
+      '👑 10 盞燈全亮後南瓜王出現！引它撞牆 3 次擊敗',
+      '🍎 靠近蘋果樹旁水桶可玩 Apple Bobbing',
+      '🤔 稻草人每 30 秒出謎語，猜對獲得寶石位置提示',
+      '🌫️ 迷霧只顯示周圍 8 格，走過的地方永久點亮',
+      '🔮 找到傳送門按 [E] 即可返回農場',
+    ];
+  }
   checkMissionStatus() {
     return {
       gems: this.collected >= 18,

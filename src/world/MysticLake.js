@@ -46,6 +46,16 @@ export class MysticLake extends AdventureBase {
     ];
   }
   getMissions() { return this._missions; }
+  getHints() {
+    return [
+      '🏃 走過湖中珍珠即可自動收集',
+      '🐸 在蓮葉間跳躍，靠近發光青蛙互動',
+      '🚣 走到碼頭旁的小船自動上船，WASD 航行',
+      '🌊 踩入漩渦會被傳送到水下洞穴',
+      '🎣 在碼頭按 [E] 拋竿，魚上鉤時快速連按 [E] 拉起',
+      '🔮 找到傳送門按 [E] 即可返回農場',
+    ];
+  }
   checkMissionStatus() {
     return {
       gems: this.collected >= 14,
