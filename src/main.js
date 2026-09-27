@@ -108,7 +108,7 @@ class FarmGame {
       this.missionPanel.show(mapName, missions, status, hints);
       // Flash a welcome toast summarising key controls
       const totalGems = missions.find(m => m.id === 'gems')?.text || '';
-      this.ui.showToast(`🗺️ ${mapName} — 收集寶藏 · 完成任務 · 按 [Tab] 查看提示`);
+      this.ui.showToast(`🗺️ ${mapName} — 收集寶藏 · 完成任務 · 按 [M] 查看提示`);
     };
     this.mapManager.onLeaveMap = () => {
       this.missionPanel.hide();
