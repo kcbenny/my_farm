@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CatModelBuilder } from './CatModelBuilder.js';
 import { CatAnimations } from './CatAnimations.js';
+import { disposeCatModel } from './CatSurfaceMaterials.js';
 
 export class CatCharacter {
   constructor(scene, characterType = 'cozy') {
@@ -27,6 +28,10 @@ export class CatCharacter {
     // Idle timer for 20-second Sleep Mode
     this.idleTimer = 0;
     this.isSleeping = false;
+    this.gestureTimer = 0;
+    this.nextGesture = 'Stretch';
+    this.blinkTimer = 0;
+    this.nextBlink = 3;
 
     // Head look-at targeting
     this.lookTargetPos = null;
@@ -44,9 +49,9 @@ export class CatCharacter {
   setupAnimations() {
     this.clips.forEach(clip => {
       const action = this.mixer.clipAction(clip);
-      if (clip.name === 'Action' || clip.name === 'Gather') {
+      if (['Action', 'Gather', 'Stretch', 'Groom', 'Blink', 'EarTwitch', 'Jump'].includes(clip.name)) {
         action.loop = THREE.LoopOnce;
-        action.clampWhenFinished = false;
+        action.clampWhenFinished = clip.name === 'Jump';
       } else {
         action.loop = THREE.LoopRepeat;
       }
@@ -59,11 +64,14 @@ export class CatCharacter {
     }
 
     this.mixer.addEventListener('finished', (e) => {
+      const name = e.action.getClip().name;
+      if (name === 'Blink' || name === 'EarTwitch' || name === 'Jump') return;
+      if (e.action !== this.actions[this.currentActionName]) return;
       if (this.onActionFinished) {
-        this.onActionFinished(e.action.getClip().name);
+        this.onActionFinished(name);
       }
       // Revert to Idle or Walk after one-shot actions
-      if (this.currentActionName === 'Action' || this.currentActionName === 'Gather') {
+      if (['Action', 'Gather', 'Stretch', 'Groom'].includes(this.currentActionName)) {
         this.playAnimation('Idle', 0.25);
       }
     });
@@ -71,7 +79,7 @@ export class CatCharacter {
 
   playAnimation(name, fadeDuration = 0.2) {
     if (!this.actions[name]) return;
-    if (this.currentActionName === name && this.actions[name].isRunning()) return;
+    if (this.currentActionName === name && (this.actions[name].isRunning() || this.actions[name].paused)) return;
 
     const prevAction = this.actions[this.currentActionName];
     const newAction = this.actions[name];
@@ -88,12 +96,8 @@ export class CatCharacter {
   }
 
   triggerAction(onFireCallback) {
-    if (this.actions['Action']) {
-      const action = this.actions['Action'];
-      action.reset();
-      action.play();
-    }
-    this.currentActionName = 'Action';
+    this.playAnimation('Action', 0.08);
+    this.reactToSound();
 
     if (onFireCallback) {
       const muzzlePos = new THREE.Vector3();
@@ -115,6 +119,7 @@ export class CatCharacter {
 
   triggerGather(onGatherCallback) {
     this.playAnimation('Gather', 0.15);
+    this.reactToSound();
     if (onGatherCallback) {
       setTimeout(() => {
         onGatherCallback();
@@ -135,15 +140,24 @@ export class CatCharacter {
   enterSleepMode() {
     if (this.isSleeping) return;
     this.isSleeping = true;
+    this.actions.Blink.stop();
+    this.actions.EarTwitch.stop();
+    this.gestureTimer = 0;
     this.playAnimation('Sleeping', 0.5);
   }
 
   wakeUp() {
     this.idleTimer = 0;
+    this.gestureTimer = 0;
     if (this.isSleeping) {
       this.isSleeping = false;
       this.playAnimation('Idle', 0.2);
     }
+  }
+
+  reactToSound() {
+    if (this.isSleeping) return;
+    this.actions.EarTwitch.reset().play();
   }
 
   spawnZzzParticle() {
@@ -176,7 +190,38 @@ export class CatCharacter {
     });
   }
 
-  update(delta) {
+  update(delta, motion = null) {
+    if (motion) {
+      const busy = this.currentActionName === 'Action' || this.currentActionName === 'Gather';
+      if (!busy && !this.isSleeping) {
+        if (!motion.grounded) {
+          this.playAnimation('Jump', 0.1);
+        } else if (this.currentActionName === 'Jump') {
+          this.playAnimation(motion.moving ? (motion.sprinting ? 'HappyRun' : 'Walk') : 'Idle', 0.16);
+        } else if ((motion.moving || motion.aiming) && ['Stretch', 'Groom'].includes(this.currentActionName)) {
+          this.playAnimation(motion.moving ? (motion.sprinting ? 'HappyRun' : 'Walk') : 'Idle', 0.12);
+        }
+      }
+      if (motion.grounded && !motion.moving && !motion.aiming && this.currentActionName === 'Idle') {
+        this.gestureTimer += delta;
+        if (this.gestureTimer >= 5) {
+          this.gestureTimer = 0;
+          this.playAnimation(this.nextGesture, 0.25);
+          this.nextGesture = this.nextGesture === 'Stretch' ? 'Groom' : 'Stretch';
+        }
+      } else if (motion.moving || motion.aiming || busy || !motion.grounded || this.isSleeping) {
+        this.gestureTimer = 0;
+      }
+    }
+
+    if (!this.isSleeping) {
+      this.blinkTimer += delta;
+      if (this.blinkTimer >= this.nextBlink) {
+        this.blinkTimer = 0;
+        this.nextBlink = 3 + Math.random() * 2;
+        this.actions.Blink.reset().play();
+      }
+    }
     if (this.mixer) {
       this.mixer.update(delta);
     }
@@ -205,6 +250,7 @@ export class CatCharacter {
 
       if (p.life <= 0) {
         this.scene.remove(p.sprite);
+        p.sprite.material.map.dispose();
         p.sprite.material.dispose();
         this.zzzParticles.splice(i, 1);
       }
@@ -217,11 +263,14 @@ export class CatCharacter {
     }
     this.zzzParticles.forEach(p => {
       if (this.scene) this.scene.remove(p.sprite);
+      p.sprite.material.map.dispose();
       p.sprite.material.dispose();
     });
     this.zzzParticles = [];
     if (this.mixer) {
       this.mixer.stopAllAction();
+      this.mixer.uncacheRoot(this.mesh);
     }
+    disposeCatModel(this.mesh);
   }
 }

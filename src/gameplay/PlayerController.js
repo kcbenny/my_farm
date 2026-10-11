@@ -385,6 +385,8 @@ export class PlayerController {
 
   triggerJump() {
     if (this.isGrounded) {
+      this.idleTimer = 0;
+      this.cat.wakeUp();
       this.isGrounded = false;
       this.verticalVelocity = 9.2; // Energetic, high-bouncing cute cat hop!
       this.jumpOffset = 0.08;
@@ -491,8 +493,8 @@ export class PlayerController {
       this.cat.mesh.rotation.y += diff * rotDamp;
 
       // Play Walk or HappyRun animation
-      const targetAnim = this.keys.sprint ? 'HappyRun' : 'Walk';
-      if (this.cat.currentActionName !== targetAnim) {
+      const targetAnim = !this.isGrounded ? 'Jump' : (this.keys.sprint ? 'HappyRun' : 'Walk');
+      if (this.cat.currentActionName !== 'Action' && this.cat.currentActionName !== targetAnim) {
         this.cat.playAnimation(targetAnim, 0.2);
       }
 
@@ -517,7 +519,7 @@ export class PlayerController {
         while (diff > Math.PI) diff -= Math.PI * 2;
         const rotDamp = 1 - Math.exp(-16.0 * delta);
         this.cat.mesh.rotation.y += diff * rotDamp;
-      } else if (!isGathering) {
+      } else if (!isGathering && this.isGrounded) {
         // Idle 20 seconds -> Sleep Mode!
         this.idleTimer += delta;
         if (this.idleTimer >= 20.0) {

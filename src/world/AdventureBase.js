@@ -124,18 +124,25 @@ export class AdventureBase {
     let collectedAny = false;
     for (const gem of this.collectibles) {
       if (gem.userData.collected) continue;
-      if (playerPos.distanceToSquared(gem.position) < 2.25) {
-        gem.userData.collected = true;
-        gem.visible = false;
-        this.collected++;
-        this.spawnBurst(gem.position.clone());
-        if (this.onCollectCallback) {
-          this.onCollectCallback(gem.position.clone(), this.collected, this.total);
-        }
+      const worldPosition = gem.getWorldPosition(new THREE.Vector3());
+      if (playerPos.distanceToSquared(worldPosition) < 2.25) {
+        this.collectGem(gem, worldPosition);
         collectedAny = true;
       }
     }
     return collectedAny;
+  }
+
+  collectGem(gem, worldPosition = gem.getWorldPosition(new THREE.Vector3())) {
+    if (gem.userData.collected) return false;
+    gem.userData.collected = true;
+    gem.visible = false;
+    this.collected++;
+    this.spawnBurst(gem.position.clone());
+    if (this.onCollectCallback) {
+      this.onCollectCallback(worldPosition, this.collected, this.total);
+    }
+    return true;
   }
 
   getProgress() {

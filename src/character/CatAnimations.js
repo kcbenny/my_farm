@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 /**
- * Creates the 4 required animation clips for the Chubby Ginger Tabby Cat:
+ * Creates locomotion, gameplay, personality and secondary-motion clips for the cat:
  * 1. Idle: Subtle breathing & tail sway loop
  * 2. Walk: Bipedal waddling walk cycle along the path
  * 3. Action: Excited combat shooting stance with weapon recoil
@@ -591,7 +591,81 @@ export class CatAnimations {
       this.createActionClip(),
       this.createGatherClip(),
       this.createHappyRunClip(),
-      this.createSleepingClip()
+      this.createSleepingClip(),
+      this.createStretchClip(),
+      this.createGroomClip(),
+      this.createJumpClip(),
+      this.createBlinkClip(),
+      this.createEarTwitchClip()
     ];
+  }
+
+  static createStretchClip() {
+    const times = [0, 0.45, 1.15, 1.7, 2.2];
+    return new THREE.AnimationClip('Stretch', 2.2, [
+      this.createQuaternionTrack('Spine', times, [
+        [0, 0, 0], [-0.12, 0, 0], [-0.2, 0, 0], [-0.1, 0, 0], [0, 0, 0],
+      ]),
+      this.createQuaternionTrack('Arm_L', times, [
+        [0, 0, 0], [-0.3, 0, -0.5], [-0.8, 0, -1.7], [-0.3, 0, -0.5], [0, 0, 0],
+      ]),
+      this.createQuaternionTrack('Arm_R', times, [
+        [0, 0, 0], [-0.3, 0, 0.5], [-0.8, 0, 1.7], [-0.3, 0, 0.5], [0, 0, 0],
+      ]),
+      this.createQuaternionTrack('Head_Bone', times, [
+        [0, 0, 0], [-0.12, 0, 0], [-0.25, 0, 0.04], [-0.1, 0, 0], [0, 0, 0],
+      ]),
+      this.createVectorTrack('Chest', 'scale', times, [
+        [1, 1, 1], [1, 1.04, 1], [1, 1.08, 1], [1, 1.03, 1], [1, 1, 1],
+      ]),
+    ]);
+  }
+
+  static createGroomClip() {
+    const times = [0, 0.35, 0.7, 1.05, 1.4, 1.75, 2.1];
+    return new THREE.AnimationClip('Groom', 2.1, [
+      this.createQuaternionTrack('Arm_L', times, [
+        [0, 0, 0], [-1.8, 0, 0.45], [-1.9, 0, 0.5], [-1.8, 0, 0.45],
+        [-1.9, 0, 0.5], [-1.3, 0, 0.3], [0, 0, 0],
+      ]),
+      this.createQuaternionTrack('Head_Bone', times, [
+        [0, 0, 0], [0.2, 0.2, -0.1], [0.32, 0.2, -0.1], [0.2, 0.2, -0.1],
+        [0.32, 0.2, -0.1], [0.15, 0.1, 0], [0, 0, 0],
+      ]),
+      this.createQuaternionTrack('Hand_L', times, [
+        [0, 0, 0], [0.1, 0.3, 0], [0.1, 0.35, 0], [0.1, 0.3, 0],
+        [0.1, 0.35, 0], [0.1, 0.2, 0], [0, 0, 0],
+      ]),
+    ]);
+  }
+
+  static createJumpClip() {
+    const times = [0, 0.18, 0.6];
+    return new THREE.AnimationClip('Jump', 0.6, [
+      this.createQuaternionTrack('Leg_L', times, [[0, 0, 0], [-0.5, 0, -0.12], [-0.4, 0, -0.1]]),
+      this.createQuaternionTrack('LegR', times, [[0, 0, 0], [-0.5, 0, 0.12], [-0.4, 0, 0.1]]),
+      this.createQuaternionTrack('Arm_L', times, [[0, 0, 0], [-0.5, 0, -0.45], [-0.4, 0, -0.35]]),
+      this.createQuaternionTrack('Arm_R', times, [[0, 0, 0], [-0.5, 0, 0.45], [-0.4, 0, 0.35]]),
+      this.createQuaternionTrack('Tail_1', times, [[-0.6, 0, 0], [-0.3, 0.15, 0], [-0.4, 0.1, 0]]),
+    ]);
+  }
+
+  static createBlinkClip() {
+    const times = [0, 0.07, 0.11, 0.23];
+    const scales = [[1, 1, 1], [1, 0.08, 1], [1, 0.08, 1], [1, 1, 1]];
+    return new THREE.AnimationClip('Blink', 0.23, [
+      this.createVectorTrack('Eye_L', 'scale', times, scales, false),
+      this.createVectorTrack('Eye_R', 'scale', times, scales, false),
+    ]);
+  }
+
+  static createEarTwitchClip() {
+    const times = [0, 0.08, 0.16, 0.32];
+    const clip = new THREE.AnimationClip('EarTwitch', 0.32, [
+      this.createQuaternionTrack('Ear_L', times, [[0, 0, 0], [0.05, 0.12, 0.13], [0, -0.03, -0.03], [0, 0, 0]]),
+      this.createQuaternionTrack('Ear_R', times, [[0, 0, 0], [0, -0.04, -0.05], [0.04, -0.1, -0.12], [0, 0, 0]]),
+    ]);
+    clip.blendMode = THREE.AdditiveAnimationBlendMode;
+    return clip;
   }
 }

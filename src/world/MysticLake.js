@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 import { AdventureBase } from './AdventureBase.js';
+import { StylizedWater } from './StylizedWater.js';
 
 const GEO = { sphere12: new THREE.SphereGeometry(1, 12, 8), cone12: new THREE.ConeGeometry(1, 1, 12) };
 
 const MAT = {
   grass: new THREE.MeshStandardMaterial({ color: 0x4a7c59, roughness: 0.85 }),
-  water: new THREE.MeshStandardMaterial({ color: 0x0b6f78, roughness: 0.08, metalness: 0.3, transparent: true, opacity: 0.82 }),
+  water: new THREE.MeshStandardMaterial({ color: 0x356e68, roughness: 0.9, flatShading: true }),
   wood: new THREE.MeshStandardMaterial({ color: 0x704629, roughness: 0.85 }),
   lily: new THREE.MeshStandardMaterial({ color: 0x3d8a4a, roughness: 0.7, side: THREE.DoubleSide }),
   lilyFlower: (h) => new THREE.MeshBasicMaterial({ color: new THREE.Color().setHSL(h, 0.7, 0.6) }),
@@ -75,9 +76,12 @@ export class MysticLake extends AdventureBase {
     this.group.add(ground);
 
     // ── Lake (radius 16) ──
-    const lake = new THREE.Mesh(new THREE.CylinderGeometry(16, 15.5, 0.25, 48), MAT.water);
+    const lake = new THREE.Mesh(new THREE.CylinderGeometry(16, 15.5, 0.25, 48, 1, true), MAT.water);
     lake.position.y = 0.05; lake.receiveShadow = true;
     this.group.add(lake);
+    this.waterSurface = new StylizedWater(new THREE.CircleGeometry(16, 48), { scale: 7, resolution: 512 });
+    this.waterSurface.position.y = 0.175;
+    this.group.add(this.waterSurface);
 
     // ── Lily pads ──
     for (let i = 0; i < 18; i++) {

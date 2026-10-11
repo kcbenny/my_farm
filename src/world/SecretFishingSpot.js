@@ -1,11 +1,12 @@
 import * as THREE from 'three';
+import { StylizedWater } from './StylizedWater.js';
 
 const materials = {
   bark: new THREE.MeshStandardMaterial({ color: 0x493427, roughness: 0.95, flatShading: true }),
   pine: new THREE.MeshStandardMaterial({ color: 0x174d3a, roughness: 0.85, flatShading: true }),
   moss: new THREE.MeshStandardMaterial({ color: 0x4d8b45, roughness: 0.9, flatShading: true }),
   stone: new THREE.MeshStandardMaterial({ color: 0x6c7471, roughness: 0.9, flatShading: true }),
-  water: new THREE.MeshStandardMaterial({ color: 0x0b6f78, roughness: 0.12, metalness: 0.28, transparent: true, opacity: 0.88, flatShading: true }),
+  water: new THREE.MeshStandardMaterial({ color: 0x356e68, roughness: 0.9, flatShading: true }),
   wood: new THREE.MeshStandardMaterial({ color: 0x704629, roughness: 0.9, flatShading: true }),
   lily: new THREE.MeshStandardMaterial({ color: 0x2f7d52, roughness: 0.75, flatShading: true, side: THREE.DoubleSide }),
 };
@@ -84,17 +85,21 @@ export class SecretFishingSpot {
     this.group.add(mossyGround);
 
     const pondBank = new THREE.Mesh(
-      new THREE.CylinderGeometry(7.05, 6.6, 0.42, 32),
+      new THREE.RingGeometry(6.3, 7.05, 32),
       new THREE.MeshStandardMaterial({ color: 0x315c45, roughness: 0.98, flatShading: true })
     );
-    pondBank.position.y = 0.02;
+    pondBank.rotation.x = -Math.PI / 2;
+    pondBank.position.y = 0.23;
     pondBank.receiveShadow = true;
     this.group.add(pondBank);
 
-    const pond = new THREE.Mesh(new THREE.CylinderGeometry(6.62, 6.25, 0.18, 32), materials.water);
+    const pond = new THREE.Mesh(new THREE.CylinderGeometry(6.62, 6.25, 0.18, 32, 1, true), materials.water);
     pond.position.y = 0.03;
     pond.receiveShadow = true;
     this.group.add(pond);
+    this.waterSurface = new StylizedWater(new THREE.CircleGeometry(6.62, 32), { scale: 5 });
+    this.waterSurface.position.y = 0.12;
+    this.group.add(this.waterSurface);
 
     for (let index = 0; index < 15; index++) {
       const angle = index / 15 * Math.PI * 2;

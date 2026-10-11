@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { StylizedWater } from './StylizedWater.js';
 
 export class PondModel {
   static createPond() {
@@ -6,11 +7,8 @@ export class PondModel {
     pondGroup.name = 'Cozy_Pond';
 
     const waterMat = new THREE.MeshStandardMaterial({
-      color: 0x48cae4,
-      roughness: 0.1,
-      metalness: 0.2,
-      transparent: true,
-      opacity: 0.85,
+      color: 0x477f77,
+      roughness: 0.85,
       flatShading: true
     });
 
@@ -46,11 +44,14 @@ export class PondModel {
     });
 
     // Pond Basin
-    const waterGeom = new THREE.CylinderGeometry(5.2, 4.2, 0.4, 16);
+    const waterGeom = new THREE.CylinderGeometry(5.2, 4.2, 0.4, 16, 1, true);
     const water = new THREE.Mesh(waterGeom, waterMat);
     water.position.set(0, 0.05, 0);
     water.receiveShadow = true;
     pondGroup.add(water);
+    const waterSurface = new StylizedWater(new THREE.CircleGeometry(5.2, 16));
+    waterSurface.position.y = 0.25;
+    pondGroup.add(waterSurface);
 
     // Lily pads
     for (let i = 0; i < 6; i++) {

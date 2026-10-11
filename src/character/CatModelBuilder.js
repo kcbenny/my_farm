@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { MeshSurfaceSampler } from 'three/addons/math/MeshSurfaceSampler.js';
+import { applyCatSurfaceDetails } from './CatSurfaceMaterials.js';
 
 /**
  * Procedural 3D Cartoon Cat Model Generator
@@ -15,6 +16,7 @@ export class CatModelBuilder {
     this.characterType = characterType;
     this.materials = this.createMaterials(characterType);
     if (characterType === 'pearl') this.preparePearlFur();
+    applyCatSurfaceDetails(this.materials, characterType);
   }
 
   preparePearlFur() {
@@ -1323,16 +1325,29 @@ export class CatModelBuilder {
     eyeGeom.computeVertexNormals();
 
     const eyeL = new THREE.Mesh(eyeGeom, this.materials.eyes);
+    eyeL.name = 'Eye_L';
     eyeL.position.set(-0.23, isPearl ? 0.09 : (isCozy ? 0.08 : 0.06), isPearl ? 0.515 : 0.45);
     eyeL.rotation.y = -0.18;
     eyeL.rotation.x = 0.05;
     headBone.add(eyeL);
 
     const eyeR = new THREE.Mesh(eyeGeom, this.materials.eyes);
+    eyeR.name = 'Eye_R';
     eyeR.position.set(0.23, isPearl ? 0.09 : (isCozy ? 0.08 : 0.06), isPearl ? 0.515 : 0.45);
     eyeR.rotation.y = 0.18;
     eyeR.rotation.x = 0.05;
     headBone.add(eyeR);
+
+    if (characterType !== 'mochi' && !isCozy) {
+      const glintGeometry = new THREE.SphereGeometry(0.019, 8, 6);
+      for (const eye of [eyeL, eyeR]) {
+        const glint = new THREE.Mesh(glintGeometry, this.materials.eyeGlint);
+        glint.name = 'Eye_Catchlight';
+        glint.position.set(-0.035, 0.065, isPearl ? 0.098 : 0.085);
+        glint.scale.set(0.8, 1.1, 0.45);
+        eye.add(glint);
+      }
+    }
 
     if (isPearl) {
       const rimMaterial = new THREE.MeshStandardMaterial({ color: 0x403539, roughness: 0.65 });
@@ -1694,4 +1709,3 @@ export class CatModelBuilder {
     };
   }
 }
-

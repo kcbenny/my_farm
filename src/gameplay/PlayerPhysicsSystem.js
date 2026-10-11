@@ -210,8 +210,8 @@ export class PlayerPhysicsSystem {
       const rotDamp = 1 - Math.exp(-18.0 * deltaTime);
       controller.cat.mesh.rotation.y += diff * rotDamp;
 
-      const targetAnim = controller.keys.sprint ? 'HappyRun' : 'Walk';
-      if (controller.cat.currentActionName !== targetAnim) {
+      const targetAnim = !controller.isGrounded ? 'Jump' : (controller.keys.sprint ? 'HappyRun' : 'Walk');
+      if (controller.cat.currentActionName !== 'Action' && controller.cat.currentActionName !== targetAnim) {
         controller.cat.playAnimation(targetAnim, 0.2);
       }
 
@@ -234,7 +234,7 @@ export class PlayerPhysicsSystem {
         while (diff > Math.PI) diff -= Math.PI * 2;
         const rotDamp = 1 - Math.exp(-16.0 * deltaTime);
         controller.cat.mesh.rotation.y += diff * rotDamp;
-      } else if (!isGathering) {
+      } else if (!isGathering && controller.isGrounded) {
         controller.idleTimer += deltaTime;
         if (controller.idleTimer >= 20.0) {
           controller.cat.enterSleepMode();

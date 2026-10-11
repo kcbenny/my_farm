@@ -31,6 +31,8 @@ export class MapManager {
     this.onEnterMap = null;
     /** Callback: () => void */
     this.onLeaveMap = null;
+    /** Callback: (mapId: string) => void */
+    this.onProximityHint = null;
   }
 
   getActiveMap() {
@@ -49,6 +51,14 @@ export class MapManager {
     return this.portalSystem.getConfig(mapId);
   }
 
+  beginFarmPortalTravel(mapId) {
+    return this.portalSystem.beginTeleport(mapId);
+  }
+
+  getPortalVisualState() {
+    return this.portalSystem.getVisualState();
+  }
+
   isNearReturnPortal(position) {
     const active = this.getActiveMap();
     return active ? active.isNearReturnPortal(position) : false;
@@ -60,15 +70,19 @@ export class MapManager {
     const cfg = ADVENTURE_MAPS[mapId];
     if (!this.maps[mapId]) {
       this.maps[mapId] = new MapClasses[mapId](this.scene, this.getTerrainHeight, cfg);
-      const map = this.maps[mapId];
-      if (map.onCollectCallback !== undefined) {
-        map.onCollectCallback = this.onCollect;
+      const createdMap = this.maps[mapId];
+      if (createdMap.onCollectCallback !== undefined) {
+        createdMap.onCollectCallback = this.onCollect;
+      }
+      if (createdMap.onProximityHint !== undefined) {
+        createdMap.onProximityHint = this.onProximityHint;
       }
     }
 
-    this.activeMapId = mapId;
-    // Fire mission panel
     const map = this.maps[mapId];
+    this.activeMapId = mapId;
+    if (map.setAtmosphere) map.setAtmosphere(true);
+    // Fire mission panel
     if (this.onEnterMap && map.getMissions) {
       const missions = map.getMissions();
       const status = map.checkMissionStatus ? map.checkMissionStatus() : {};
@@ -81,6 +95,7 @@ export class MapManager {
   returnToFarm() {
     if (!this.activeMapId) return null;
     const cfg = ADVENTURE_MAPS[this.activeMapId];
+    this.maps[this.activeMapId]?.setAtmosphere?.(false);
     this.activeMapId = null;
     if (this.onLeaveMap) this.onLeaveMap();
     return cfg.farmArrival.clone();
@@ -168,10 +183,11 @@ export class MapManager {
     return map ? map.isComplete() : false;
   }
 
-  update(delta) {
-    this.portalSystem.update(delta);
+  update(delta, playerPosition) {
+    const completedPortalTravel = this.portalSystem.update(delta, playerPosition);
     if (this.activeMapId && this.maps[this.activeMapId]) {
       this.maps[this.activeMapId].update(delta);
     }
+    return completedPortalTravel;
   }
 }

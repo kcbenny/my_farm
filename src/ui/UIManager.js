@@ -157,6 +157,21 @@ export class UIManager {
       });
     });
 
+    const bloomToggle = document.getElementById('toggle-bloom');
+    const depthToggle = document.getElementById('toggle-depth-of-field');
+    if (bloomToggle) {
+      bloomToggle.checked = this.game.postProcessing.bloomPass.enabled;
+      bloomToggle.addEventListener('change', () => {
+        this.game.postProcessing.setBloomEnabled(bloomToggle.checked);
+      });
+    }
+    if (depthToggle) {
+      depthToggle.checked = this.game.postProcessing.depthOfField;
+      depthToggle.addEventListener('change', () => {
+        this.game.postProcessing.setDepthOfFieldEnabled(depthToggle.checked);
+      });
+    }
+
     // 7. GLB Export Buttons
     const topExportBtn = document.getElementById('btn-export-glb');
     const charExportBtn = document.getElementById('btn-export-character-glb');
@@ -166,7 +181,7 @@ export class UIManager {
     const sceneExportBtn = document.getElementById('btn-export-scene-glb');
 
     const handleCharExport = async () => {
-      this.showToast('Generating Character .GLB with 4 Animation Clips...');
+      this.showToast(`Generating Character .GLB with ${this.game.cat.clips.length} Animation Clips...`);
       try {
         await GLTFExportManager.exportCharacter(this.game.cat, 'chubby_ginger_tabby_cat.glb');
         this.showToast('✓ Character .GLB successfully exported!');

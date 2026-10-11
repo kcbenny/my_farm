@@ -7,6 +7,7 @@ import { CozySceneModels } from './CozySceneModels.js';
 import { ModularTileSystem } from './ModularTileSystem.js';
 import { TreeModelBuilder } from './TreeModelBuilder.js';
 import { WorldPhysics, normalizeAsset } from '../gameplay/WorldPhysics.js';
+import { CampfireParticles } from './CampfireParticles.js';
 
 export class FarmEnvironment {
   constructor(scene) {
@@ -228,10 +229,10 @@ export class FarmEnvironment {
   createTerrainGeometry(coordinates, backdrop = false) {
     const positions = [];
     const colors = [];
-    const meadow = new THREE.Color(0x76ad42);
-    const hillside = new THREE.Color(0x87b957);
-    const rock = new THREE.Color(0x837f6a);
-    const summit = new THREE.Color(0xbab6a2);
+    const meadow = new THREE.Color(0x88a95f);
+    const hillside = new THREE.Color(0xa0ba72);
+    const rock = new THREE.Color(0x898674);
+    const summit = new THREE.Color(0xc9c3ae);
     const normal = new THREE.Vector3();
     const edge = new THREE.Vector3();
     const color = new THREE.Color();
@@ -779,13 +780,14 @@ export class FarmEnvironment {
 
     props.forEach(({ scene, position, rotationY }) => {
       scene.rotation.y = rotationY;
-      this.placeStructure(scene, position, 'farm', 5);
+      if (this.placeStructure(scene, position, 'farm', 5) && scene.userData.update) {
+        this.animatedObjects.push(scene);
+      }
     });
   }
 
   createCampfiresAndLanterns() {
     this.campfires = [];
-    this.emberParticles = [];
     this.campfireTime = 0;
 
     // Materials
@@ -794,9 +796,17 @@ export class FarmEnvironment {
     const emberBedMat = new THREE.MeshBasicMaterial({ color: 0xff5a1f, transparent: true, opacity: 0.95 });
     const flameOuterMat = new THREE.MeshBasicMaterial({ color: 0xffc14d, transparent: true, opacity: 0.82 });
     const flameMidMat = new THREE.MeshBasicMaterial({ color: 0xff8f2d, transparent: true, opacity: 0.9 });
-    const flameCoreMat = new THREE.MeshBasicMaterial({ color: 0xfff0c2, transparent: true, opacity: 0.95 });
+    const flameCoreMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(0xfff0c2).multiplyScalar(2.8),
+      transparent: true,
+      opacity: 0.95,
+      toneMapped: false,
+    });
     const postMat = new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 0.8, flatShading: true });
-    const lanternGlassMat = new THREE.MeshBasicMaterial({ color: 0xffd166 });
+    const lanternGlassMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(0xffd166).multiplyScalar(3),
+      toneMapped: false,
+    });
 
     // 1. Campfire Locations (Center pathway, Pond side, Garden plot)
     const campfireLocations = [
@@ -945,16 +955,19 @@ export class FarmEnvironment {
       this.scene.add(postGroup);
       this.physics.register(postGroup, 'obstacle');
     });
+    this.campfireParticles = new CampfireParticles(this.scene, this.campfires);
   }
 
   setupLighting() {
-    // Soft Ambient Hemisphere Light (Sky cozy blue + Ground warm green)
-    this.hemiLight = new THREE.HemisphereLight(0xbde0fe, 0x588157, 1.2);
+    // Soft ambient fill keeps the low-poly facets readable without washing out their colors.
+    this.hemiLight = new THREE.HemisphereLight(0xd6edff, 0x66734d, 1.05);
     this.hemiLight.position.set(0, 50, 0);
     this.scene.add(this.hemiLight);
+    this.ambientLight = new THREE.AmbientLight(0xffead3, 0.22);
+    this.scene.add(this.ambientLight);
 
-    // Warm Directional Sun Light with soft shadows
-    this.sunLight = new THREE.DirectionalLight(0xfff3b0, 1.8);
+    // A warm, low-angle sun gives props and terrain a consistent soft-shadow direction.
+    this.sunLight = new THREE.DirectionalLight(0xffe2ad, 2.0);
     this.sunLight.position.set(25, 40, 20);
     this.sunLight.castShadow = true;
     this.sunLight.shadow.mapSize.width = 2048;
@@ -967,13 +980,78 @@ export class FarmEnvironment {
     this.sunLight.shadow.camera.right = d;
     this.sunLight.shadow.camera.top = d;
     this.sunLight.shadow.camera.bottom = -d;
-    this.sunLight.shadow.bias = -0.0005;
+    this.sunLight.shadow.bias = -0.00015;
+    this.sunLight.shadow.normalBias = 0.035;
+    this.sunLight.shadow.radius = 4;
+    this.sunLight.shadow.camera.updateProjectionMatrix();
 
     this.scene.add(this.sunLight);
+    this.createAmbientMotes();
+  }
+
+  createAmbientMotes() {
+    const positions = [];
+    const seeds = [];
+    for (let i = 0; i < 110; i++) {
+      const x = (Math.random() - 0.5) * 64;
+      const z = (Math.random() - 0.5) * 64;
+      positions.push(x, this.getTerrainHeight(x, z) + 0.8 + Math.random() * 3.6, z);
+      seeds.push(Math.random());
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute('aSeed', new THREE.Float32BufferAttribute(seeds, 1));
+
+    const material = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uColor: { value: new THREE.Color(0xffedbd) },
+      },
+      vertexShader: `
+        attribute float aSeed;
+        uniform float uTime;
+        varying float vAlpha;
+
+        void main() {
+          float phase = uTime * 0.45 + aSeed * 6.2831853;
+          vec3 motePosition = position;
+          motePosition.y += sin(phase) * 0.32;
+          motePosition.x += sin(phase * 0.6 + position.z) * 0.18;
+
+          vec4 viewPosition = modelViewMatrix * vec4(motePosition, 1.0);
+          gl_Position = projectionMatrix * viewPosition;
+          gl_PointSize = clamp((5.0 + 3.0 * sin(phase * 1.7)) * (110.0 / -viewPosition.z), 1.5, 7.0);
+          vAlpha = 0.25 + 0.5 * (0.5 + 0.5 * sin(phase * 1.3));
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 uColor;
+        varying float vAlpha;
+
+        void main() {
+          float radius = length(gl_PointCoord - vec2(0.5));
+          float glow = 1.0 - smoothstep(0.08, 0.5, radius);
+          gl_FragColor = vec4(uColor, glow * vAlpha * 0.34);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+
+    this.pollenMotes = new THREE.Points(geometry, material);
+    this.pollenMotes.name = 'Ambient_Pollen_Motes';
+    this.pollenMotes.userData.physics = false;
+    this.pollenMotes.layers.set(1);
+    this.scene.add(this.pollenMotes);
   }
 
   setLightingPreset(preset) {
+    this.lightingPreset = preset;
     if (preset === 'day') {
+      this.ambientLight.color.setHex(0xffead3);
+      this.ambientLight.intensity = 0.22;
       this.hemiLight.color.setHex(0xbde0fe);
       this.hemiLight.groundColor.setHex(0x588157);
       this.hemiLight.intensity = 1.2;
@@ -983,6 +1061,8 @@ export class FarmEnvironment {
       this.scene.background = new THREE.Color(0x78b5e7);
       this.scene.fog = new THREE.FogExp2(0x78b5e7, 0.0032);
     } else if (preset === 'sunset') {
+      this.ambientLight.color.setHex(0xffd3af);
+      this.ambientLight.intensity = 0.18;
       this.hemiLight.color.setHex(0xffaa5e);
       this.hemiLight.groundColor.setHex(0x54473f);
       this.hemiLight.intensity = 1.0;
@@ -992,6 +1072,8 @@ export class FarmEnvironment {
       this.scene.background = new THREE.Color(0xf77f00);
       this.scene.fog = new THREE.FogExp2(0xf77f00, 0.018);
     } else if (preset === 'night') {
+      this.ambientLight.color.setHex(0xc5d2ed);
+      this.ambientLight.intensity = 0.16;
       this.hemiLight.color.setHex(0x52b788);      // Soft moonlight cyan-green sky glow
       this.hemiLight.groundColor.setHex(0x2d6a4f); // Warm night grass ambient glow
       this.hemiLight.intensity = 1.1;             // Bright, clear moonlight ambient!
@@ -1001,6 +1083,8 @@ export class FarmEnvironment {
       this.scene.background = new THREE.Color(0x131b3e); // Deep cozy indigo night sky
       this.scene.fog = new THREE.FogExp2(0x131b3e, 0.008); // Light soft fog so everything is clearly visible!
     } else if (preset === 'studio') {
+      this.ambientLight.color.setHex(0xffffff);
+      this.ambientLight.intensity = 0.25;
       this.hemiLight.color.setHex(0xffffff);
       this.hemiLight.groundColor.setHex(0xcccccc);
       this.hemiLight.intensity = 1.5;
@@ -1012,7 +1096,15 @@ export class FarmEnvironment {
     }
   }
 
-  update(delta) {
+  update(delta, playerPosition = null) {
+    if (this.pollenMotes) {
+      this.pollenMotes.material.uniforms.uTime.value += delta;
+    }
+
+    for (const object of this.animatedObjects) {
+      object.userData.update(delta, playerPosition);
+    }
+
     // Gentle windmill rotation
     if (this.windmillSails) {
       this.windmillSails.rotation.z += delta * 0.8;
@@ -1088,63 +1180,9 @@ export class FarmEnvironment {
           fire.flameTongueR.position.y = 0.16 + Math.cos(phase * 2.2 + 0.7) * 0.05;
         }
 
-        const spawnGate = Math.abs(Math.sin(phase * 6.0 + fire.seed)) > 0.92;
-        if (spawnGate && this.emberParticles.length < 90) {
-          const emberCount = 2;
-          for (let i = 0; i < emberCount; i++) {
-            const emberGeom = new THREE.DodecahedronGeometry(0.02 + ((idx + i) % 3) * 0.01);
-            const emberMat = new THREE.MeshBasicMaterial({ color: i === 0 ? 0xffc14d : 0xff7a18, transparent: true, opacity: 0.92 });
-            const emberMesh = new THREE.Mesh(emberGeom, emberMat);
-            const offsetAngle = phase + i * 2.1 + fire.seed;
-            emberMesh.position.set(
-              fire.pos.x + Math.cos(offsetAngle) * 0.18,
-              fire.pos.y + 0.35 + Math.sin(phase * 2.0 + i) * 0.03,
-              fire.pos.z + Math.sin(offsetAngle) * 0.18
-            );
-            this.scene.add(emberMesh);
-
-            this.emberParticles.push({
-              mesh: emberMesh,
-              age: 0,
-              life: 1.6 + i * 0.15,
-              startPos: emberMesh.position.clone(),
-              seed: fire.seed + idx * 0.6 + i * 1.7,
-              swirl: 0.7 + i * 0.15
-            });
-          }
-        }
       });
     }
 
-    // Update Campfire Ember Particles
-    if (this.emberParticles) {
-      for (let i = this.emberParticles.length - 1; i >= 0; i--) {
-        const p = this.emberParticles[i];
-        p.age += delta;
-        p.life -= delta;
-
-        const rise = p.age * (0.9 + p.swirl * 0.35);
-        const driftX = Math.sin(p.age * 2.4 + p.seed) * 0.18 + Math.cos(p.age * 0.7 + p.seed) * 0.06;
-        const driftZ = Math.cos(p.age * 2.1 + p.seed) * 0.18 + Math.sin(p.age * 0.8 + p.seed) * 0.06;
-        const lift = p.age * (0.75 + p.swirl * 0.2);
-
-        p.mesh.position.set(
-          p.startPos.x + driftX,
-          p.startPos.y + lift + rise * 0.15,
-          p.startPos.z + driftZ
-        );
-
-        const fade = Math.max(0, p.life / 1.6);
-        p.mesh.material.opacity = Math.min(0.95, fade);
-        p.mesh.scale.setScalar(0.8 + (1.0 - fade) * 0.35);
-
-        if (p.life <= 0) {
-          this.scene.remove(p.mesh);
-          p.mesh.geometry.dispose();
-          p.mesh.material.dispose();
-          this.emberParticles.splice(i, 1);
-        }
-      }
-    }
+    this.campfireParticles.update(delta);
   }
 }

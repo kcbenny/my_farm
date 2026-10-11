@@ -63,6 +63,9 @@
               <button class="preview-anim-btn" data-anim="Action">Action 🌿</button>
               <button class="preview-anim-btn" data-anim="Gather">Gather 🥕</button>
               <button class="preview-anim-btn" data-anim="HappyRun">Trot 🏃</button>
+              <button class="preview-anim-btn" data-anim="Stretch">Stretch</button>
+              <button class="preview-anim-btn" data-anim="Groom">Groom</button>
+              <button class="preview-anim-btn" data-anim="Jump">Hop</button>
             </div>
           </div>
         </div>
@@ -617,6 +620,14 @@
       </div>
 
       <div class="inspector-section">
+        <label class="section-label">Kitty Personality:</label>
+        <div class="chip-group">
+          <button class="anim-btn" data-anim="Stretch">Stretch</button>
+          <button class="anim-btn" data-anim="Groom">Groom paws</button>
+        </div>
+      </div>
+
+      <div class="inspector-section">
         <label class="section-label">Character Accessories & Gear:</label>
         <div class="toggle-row">
           <label class="toggle-chip">
@@ -644,12 +655,27 @@
         </div>
       </div>
 
+      <div class="inspector-section">
+        <label class="section-label">Visual Effects:</label>
+        <div class="toggle-row">
+          <label class="toggle-chip">
+            <input type="checkbox" id="toggle-bloom" checked />
+            <span>Soft Bloom</span>
+          </label>
+          <label class="toggle-chip">
+            <input type="checkbox" id="toggle-depth-of-field" checked />
+            <span>Depth of Field (TPS only)</span>
+          </label>
+        </div>
+        <p class="export-note">Depth of field pauses while aiming. Off by default on touch devices.</p>
+      </div>
+
       <div class="inspector-section export-section">
         <label class="section-label">Download 3D Assets (.GLB):</label>
         <div class="export-btn-group">
           <button id="btn-export-character-glb" class="action-btn primary">
             <span class="btn-icon">🐱</span>
-            <span>Download Character .GLB (4 Clips)</span>
+            <span>Download Character .GLB (All Clips)</span>
           </button>
           <button id="btn-export-livestock-glb" class="action-btn secondary">
             <span class="btn-icon">🐄</span>

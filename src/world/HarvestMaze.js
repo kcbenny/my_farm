@@ -18,6 +18,62 @@ const MAT = {
   waterBucket: new THREE.MeshStandardMaterial({ color: 0x775533, roughness: 0.8 }),
 };
 
+function createRandom(seed = 0x4d415a45) {
+  let state = seed >>> 0;
+  return () => {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    return state / 0x100000000;
+  };
+}
+
+function createMazeNavigation(size = 11, cellSize = 4.6) {
+  const random = createRandom();
+  const cells = Array.from({ length: size * size }, (_, index) => ({
+    x: index % size,
+    z: Math.floor(index / size),
+    visited: false,
+    walls: { north: true, east: true, south: true, west: true },
+    neighbours: [],
+  }));
+  const indexAt = (x, z) => z * size + x;
+  const stack = [cells[indexAt(Math.floor(size / 2), Math.floor(size / 2))]];
+  stack[0].visited = true;
+  const directions = [
+    [0, -1, 'north', 'south'], [1, 0, 'east', 'west'],
+    [0, 1, 'south', 'north'], [-1, 0, 'west', 'east'],
+  ];
+
+  while (stack.length) {
+    const cell = stack[stack.length - 1];
+    const options = directions
+      .map(([dx, dz, wall, opposite]) => ({ next: cells[indexAt(cell.x + dx, cell.z + dz)], wall, opposite }))
+      .filter(({ next }) => next && !next.visited);
+    if (!options.length) {
+      stack.pop();
+      continue;
+    }
+    const choice = options[Math.floor(random() * options.length)];
+    cell.walls[choice.wall] = false;
+    choice.next.walls[choice.opposite] = false;
+    cell.neighbours.push(cells.indexOf(choice.next));
+    choice.next.neighbours.push(cells.indexOf(cell));
+    choice.next.visited = true;
+    stack.push(choice.next);
+  }
+
+  const offset = (size - 1) * cellSize * 0.5;
+  const segments = [];
+  for (const cell of cells) {
+    const cx = cell.x * cellSize - offset;
+    const cz = cell.z * cellSize - offset;
+    if (cell.walls.north) segments.push({ cx, cz: cz - cellSize * 0.5, w: cellSize, d: 0.6 });
+    if (cell.walls.west) segments.push({ cx: cx - cellSize * 0.5, cz, w: 0.6, d: cellSize });
+    if (cell.x === size - 1 && cell.walls.east) segments.push({ cx: cx + cellSize * 0.5, cz, w: 0.6, d: cellSize });
+    if (cell.z === size - 1 && cell.walls.south) segments.push({ cx, cz: cz + cellSize * 0.5, w: cellSize, d: 0.6 });
+  }
+  return { cellSize, cells, segments, offset };
+}
+
 export class HarvestMaze extends AdventureBase {
   constructor(scene, getTerrainHeight, cfg) {
     super(scene, cfg, 30);
@@ -39,6 +95,9 @@ export class HarvestMaze extends AdventureBase {
     this.revealRadius = 8;
     // Fog of war tracking grid (simple)
     this.fogGrid = new Set();
+    this.gemRaycaster = new THREE.Raycaster();
+    this.gemParticlePositions = null;
+    this.lastHintTime = -Infinity;
 
     this.build();
     this._setupMissions();
@@ -75,70 +134,81 @@ export class HarvestMaze extends AdventureBase {
     };
   }
 
+  getMazePosition(index, y = 0) {
+    const cell = this.navigationMesh.cells[index % this.navigationMesh.cells.length];
+    return new THREE.Vector3(
+      cell.x * this.navigationMesh.cellSize - this.navigationMesh.offset,
+      y,
+      cell.z * this.navigationMesh.cellSize - this.navigationMesh.offset
+    );
+  }
+
+  findNavigationPath(fromIndex, toIndex) {
+    const previous = new Map([[fromIndex, null]]);
+    const queue = [fromIndex];
+    while (queue.length) {
+      const current = queue.shift();
+      if (current === toIndex) break;
+      for (const neighbour of this.navigationMesh.cells[current].neighbours) {
+        if (!previous.has(neighbour)) {
+          previous.set(neighbour, current);
+          queue.push(neighbour);
+        }
+      }
+    }
+    if (!previous.has(toIndex)) return [];
+    const path = [];
+    for (let node = toIndex; node !== null; node = previous.get(node)) path.unshift(this.getMazePosition(node));
+    return path;
+  }
+
   build() {
     const R = this.mapRadius;
 
-    // Ground
-    const ground = new THREE.Mesh(new THREE.CylinderGeometry(R, R + 0.5, 0.5, 48), MAT.dirt);
-    ground.position.y = -0.25; ground.receiveShadow = true;
+    const groundGeometry = new THREE.PlaneGeometry(R * 2, R * 2, 40, 40);
+    const groundPositions = groundGeometry.attributes.position;
+    for (let i = 0; i < groundPositions.count; i++) {
+      const x = groundPositions.getX(i);
+      const z = groundPositions.getY(i);
+      groundPositions.setZ(i, Math.sin(x * 0.18) * Math.cos(z * 0.16) * 0.08);
+    }
+    groundGeometry.computeVertexNormals();
+    const ground = new THREE.Mesh(groundGeometry, MAT.dirt);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -0.08;
+    ground.receiveShadow = true;
     this.group.add(ground);
 
-    // ── Expanded corn maze (40 wall segments) ──
-    const mazeLayout = [
-      // Outer ring
-      [-14, -14, 0.6, 28], [14, -14, 0.6, 28],
-      [-14, -14, 28, 0.6], [-14, 14, 28, 0.6],
-      // Inner walls — complex labyrinth
-      [-10, -10, 0.5, 20], [10, -10, 0.5, 20],
-      [-10, -10, 20, 0.5], [-10, 10, 20, 0.5],
-      // Cross corridors
-      [-6, -6, 0.5, 12], [6, -6, 0.5, 12],
-      [-6, 0, 0.5, 6], [6, 0, 0.5, 6],
-      [-6, 6, 12, 0.5], [6, -6, 0.5, 6],
-      // Dead ends
-      [-3, -10, 0.5, 4], [3, -8, 0.5, 4],
-      [-3, 6, 6, 0.5], [3, 4, 6, 0.5],
-      [-10, 3, 4, 0.5], [10, -4, 4, 0.5],
-      [-10, -4, 0.5, 7], [10, 2, 0.5, 8],
-      // Extra winding walls
-      [-8, -2, 4, 0.5], [8, -2, 4, 0.5],
-      [-4, -4, 0.5, 8], [4, -4, 0.5, 8],
-      [-2, 0, 4, 0.5], [2, 0, 4, 0.5],
-      [-8, 8, 0.5, 4], [8, -8, 0.5, 4],
-      // Center area walls
-      [-2, -2, 4, 0.5], [2, 2, 0.5, 4],
-      // Additional outer
-      [-18, -18, 0.5, 6], [18, -18, 0.5, 6],
-      [-18, 12, 0.5, 6], [18, -12, 0.5, 6],
-      [-18, -6, 6, 0.5], [18, 6, 6, 0.5],
-    ];
-
+    this.navigationMesh = createMazeNavigation();
+    const mazeLayout = this.navigationMesh.segments.map(({ cx, cz, w, d }) => [cx, cz, w, d]);
     const cornGeo = new THREE.BoxGeometry(1, 2.5, 1);
     const stalkGeo = new THREE.CylinderGeometry(0.04, 0.06, 0.5, 4);
-    mazeLayout.forEach(([cx, cz, w, d]) => {
-      const wall = new THREE.Mesh(cornGeo, MAT.corn);
-      wall.scale.set(w, 1, d);
-      wall.position.set(cx, 1.25, cz);
-      wall.castShadow = true; wall.receiveShadow = true;
-      this.group.add(wall);
-      const count = Math.max(2, Math.floor(Math.max(w, d) * 1.2));
+    const walls = new THREE.InstancedMesh(cornGeo, MAT.corn, mazeLayout.length);
+    const stalkCount = mazeLayout.reduce((count, [, , w, d]) => count + Math.ceil(Math.max(w, d) * 1.2), 0);
+    const stalks = new THREE.InstancedMesh(stalkGeo, MAT.stem, stalkCount);
+    const matrix = new THREE.Matrix4();
+    const random = createRandom(0x434f524e);
+    let stalkIndex = 0;
+    mazeLayout.forEach(([cx, cz, w, d], index) => {
+      matrix.compose(new THREE.Vector3(cx, 1.25, cz), new THREE.Quaternion(), new THREE.Vector3(w, 1, d));
+      walls.setMatrixAt(index, matrix);
+      const count = Math.ceil(Math.max(w, d) * 1.2);
       for (let j = 0; j < count; j++) {
-        const stalk = new THREE.Mesh(stalkGeo, MAT.stem);
-        stalk.position.set(
-          cx + (w > 1 ? (j / (w * 1.2) - 0.5) * w + (Math.random() - 0.5) * 0.3 : (Math.random() - 0.5) * 0.3),
-          2.7,
-          cz + (d > 1 ? (j / (d * 1.2) - 0.5) * d + (Math.random() - 0.5) * 0.3 : (Math.random() - 0.5) * 0.3)
-        );
-        this.group.add(stalk);
+        const t = count === 1 ? 0.5 : j / (count - 1);
+        const x = cx + (w > d ? (t - 0.5) * w : (random() - 0.5) * 0.25);
+        const z = cz + (d > w ? (t - 0.5) * d : (random() - 0.5) * 0.25);
+        matrix.makeTranslation(x, 2.7, z);
+        stalks.setMatrixAt(stalkIndex++, matrix);
       }
     });
+    walls.castShadow = walls.receiveShadow = true;
+    stalks.castShadow = true;
+    this.group.add(walls, stalks);
 
     // ── Lanterns (scattered in maze) ──
-    const lanternPositions = [
-      [-10, -4], [10, 6], [-6, 8], [4, -10], [-12, 10],
-      [8, -6], [-4, -12], [12, -2], [0, -8], [6, 2],
-    ];
-    lanternPositions.forEach(([lx, lz]) => {
+    const lanternCellIndices = [4, 14, 25, 37, 48, 59, 70, 82, 96, 116];
+    lanternCellIndices.forEach(cellIndex => {
+      const position = this.getMazePosition(cellIndex);
       const lantern = new THREE.Group();
       const body = new THREE.Mesh(GEO.sphere12, MAT.lanternOff.clone());
       body.scale.set(0.35, 0.3, 0.35); body.position.y = 0.35;
@@ -148,7 +218,7 @@ export class HarvestMaze extends AdventureBase {
       const glow = new THREE.Mesh(GEO.sphere12, MAT.lanternOff.clone());
       glow.scale.setScalar(0.15); glow.position.y = 0.35;
       lantern.add(glow);
-      lantern.position.set(lx, 0, lz);
+      lantern.position.copy(position);
       lantern.userData = { lit: false, body, glow, index: this.lanterns.length };
       this.group.add(lantern);
       this.lanterns.push(lantern);
@@ -166,7 +236,7 @@ export class HarvestMaze extends AdventureBase {
       pumpkin.add(face);
       const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.08, 0.25, 6), MAT.stem);
       stem.position.y = 0.3; pumpkin.add(stem);
-      pumpkin.position.set((Math.random() - 0.5) * 28, 0.25, (Math.random() - 0.5) * 28);
+      pumpkin.position.copy(this.getMazePosition(6 + i * 7, 0.25));
       pumpkin.castShadow = true;
       this.group.add(pumpkin);
       this.pumpkins.push({ group: pumpkin, face, phase: Math.random() * Math.PI * 2 });
@@ -209,9 +279,14 @@ export class HarvestMaze extends AdventureBase {
     head.scale.setScalar(0.35); head.position.y = 3.6; scarecrow.add(head);
     const hat = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.06, 0.6, 8), MAT.stem);
     hat.position.y = 4.1; scarecrow.add(hat);
-    scarecrow.position.set(0, 0, 8);
+    scarecrow.position.copy(this.getMazePosition(60));
     this.group.add(scarecrow);
     this.scarecrow = scarecrow;
+    this.scarecrowMixer = new THREE.AnimationMixer(scarecrow);
+    const swayClip = new THREE.AnimationClip('Sway', 2.4, [
+      new THREE.NumberKeyframeTrack('.rotation[y]', [0, 1.2, 2.4], [-0.16, 0.16, -0.16]),
+    ]);
+    this.scarecrowMixer.clipAction(swayClip).play();
     // Riddle bubble
     this.riddleBubble = null;
 
@@ -259,16 +334,52 @@ export class HarvestMaze extends AdventureBase {
     this.kingGroup.visible = false;
     this.group.add(this.kingGroup);
 
-    // ── Ambient ──
+    // ── Lighting ──
+    const moonLight = new THREE.DirectionalLight(0xffd4a3, 1.3);
+    moonLight.position.set(-14, 20, 10);
+    moonLight.castShadow = true;
+    moonLight.shadow.mapSize.set(1024, 1024);
+    moonLight.shadow.camera.left = -30;
+    moonLight.shadow.camera.right = 30;
+    moonLight.shadow.camera.top = 30;
+    moonLight.shadow.camera.bottom = -30;
+    this.group.add(moonLight);
     const amb = new THREE.PointLight(0xffbb66, 2.2, 18, 2);
     amb.position.y = 5; this.group.add(amb);
-
-    // ── Gems ──
-    const punkPositions = [];
-    for (let i = 0; i < 18; i++) {
-      punkPositions.push(new THREE.Vector3(-14 + Math.random() * 28, 0.55, -14 + Math.random() * 28));
+    for (const cellIndex of [25, 96]) {
+      const spotlight = new THREE.SpotLight(0xffa34d, 3.4, 12, Math.PI / 7, 0.55, 1.5);
+      spotlight.position.copy(this.getMazePosition(cellIndex, 6));
+      spotlight.target.position.copy(this.getMazePosition(cellIndex));
+      spotlight.castShadow = true;
+      this.group.add(spotlight, spotlight.target);
     }
-    this.spawnGems(punkPositions, 0.25);
+
+    // ── Pumpkin gems and their particle aura ──
+    const gemStart = this.collectibles.length;
+    this.spawnGems(Array.from({ length: 18 }, (_, index) => this.getMazePosition(3 + index * 6, 0.65)), 0.28);
+    for (const gem of this.collectibles.slice(gemStart)) {
+      gem.material = new THREE.MeshStandardMaterial({
+        color: 0xff8b2d,
+        emissive: 0xff4d00,
+        emissiveIntensity: 2.5,
+        roughness: 0.35,
+      });
+      gem.userData.pumpkinGem = true;
+    }
+    const particleCount = 18 * 10;
+    this.gemParticlePositions = new Float32Array(particleCount * 3);
+    this.gemParticles = new THREE.Points(
+      new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(this.gemParticlePositions, 3)),
+      new THREE.PointsMaterial({
+        color: 0xffd166,
+        size: 0.09,
+        transparent: true,
+        opacity: 0.85,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+    );
+    this.group.add(this.gemParticles);
 
     this.addReturnPortal(this.cfg, new THREE.Vector3(-8, 0, -8));
 
@@ -289,6 +400,39 @@ export class HarvestMaze extends AdventureBase {
       this.addObstacleCollider(new THREE.Vector3(Math.sin(a) * 22, 0, Math.cos(a) * 22), 1.0);
     }
     this.addObstacleCollider(new THREE.Vector3(0, 0, 8), 0.6);
+  }
+
+  setAtmosphere(active) {
+    if (active) {
+      this.previousFog = this.scene.fog;
+      this.scene.fog = new THREE.FogExp2(0x4a2a19, 0.026);
+      return;
+    }
+    if (this.previousFog) this.scene.fog = this.previousFog;
+  }
+
+  checkCollect(playerPos) {
+    let collectedAny = false;
+    for (const gem of this.collectibles) {
+      if (gem.userData.collected) continue;
+      const worldPosition = gem.getWorldPosition(new THREE.Vector3());
+      const distanceSq = playerPos.distanceToSquared(worldPosition);
+      if (distanceSq < 16 && this.time - this.lastHintTime > 6) {
+        this.lastHintTime = this.time;
+        this.onProximityHint?.(this.cfg.id);
+      }
+      if (distanceSq >= 2.25) continue;
+
+      const origin = playerPos.clone().add(new THREE.Vector3(0, 0.35, 0));
+      const direction = worldPosition.clone().sub(origin);
+      const rayDistance = direction.length();
+      this.gemRaycaster.set(origin, direction.normalize());
+      this.gemRaycaster.far = rayDistance + 0.1;
+      if (this.gemRaycaster.intersectObject(gem, false).length) {
+        collectedAny = this.collectGem(gem, worldPosition) || collectedAny;
+      }
+    }
+    return collectedAny;
   }
 
   /* ──── Lantern interaction ──── */
@@ -428,12 +572,30 @@ export class HarvestMaze extends AdventureBase {
 
   update(delta) {
     super.update(delta);
+    this.scarecrowMixer.update(delta);
 
     for (const p of this.pumpkins) {
       const pulse = 0.5 + Math.sin(this.time * 2 + p.phase) * 0.4;
       p.face.material.opacity = pulse;
       p.face.scale.set(0.55 * pulse, 0.35 * pulse, 0.55 * pulse);
     }
+
+    for (let gemIndex = 0; gemIndex < this.collectibles.length; gemIndex++) {
+      const gem = this.collectibles[gemIndex];
+      for (let particle = 0; particle < 10; particle++) {
+        const index = (gemIndex * 10 + particle) * 3;
+        if (gem.userData.collected) {
+          this.gemParticlePositions[index + 1] = -10;
+          continue;
+        }
+        const angle = this.time * 2.4 + particle / 10 * Math.PI * 2 + gemIndex;
+        const radius = 0.34 + (particle % 3) * 0.05;
+        this.gemParticlePositions[index] = gem.position.x + Math.cos(angle) * radius;
+        this.gemParticlePositions[index + 1] = gem.position.y + 0.1 + Math.sin(angle * 1.7) * 0.2;
+        this.gemParticlePositions[index + 2] = gem.position.z + Math.sin(angle) * radius;
+      }
+    }
+    this.gemParticles.geometry.attributes.position.needsUpdate = true;
 
     // Lantern glows
     for (const lantern of this.lanterns) {

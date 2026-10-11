@@ -20,6 +20,9 @@ import { normalizeAsset } from './gameplay/WorldPhysics.js';
 import { SecretFishingSpot } from './world/SecretFishingSpot.js';
 import { MapManager } from './world/MapManager.js';
 import { MissionPanel } from './ui/MissionPanel.js';
+import { FarmPostProcessing } from './rendering/FarmPostProcessing.js';
+import { CatLifeParticles } from './character/CatLifeParticles.js';
+import { updateWaterSurfaces } from './world/StylizedWater.js';
 
 class FarmGame {
   constructor() {
@@ -57,6 +60,7 @@ class FarmGame {
       1000
     );
     this.camera.position.set(0, 4, 8);
+    this.camera.layers.enable(1);
 
     // 3. Renderer
     this.renderer = new THREE.WebGLRenderer({
@@ -69,10 +73,14 @@ class FarmGame {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.15;
+    this.renderer.toneMappingExposure = 1.05;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     this.container.appendChild(this.renderer.domElement);
+    this.postProcessing = new FarmPostProcessing(this.renderer, this.scene, this.camera, {
+      depthOfField: !window.matchMedia('(pointer: coarse)').matches,
+    });
+    this.postProcessing.resize(window.innerWidth, window.innerHeight, this.renderer.getPixelRatio());
   }
 
   initComponents() {
@@ -114,8 +122,10 @@ class FarmGame {
       this.missionPanel.hide();
     };
     this.mapManager.onCollect = (pos, collected, total) => {
+      this.sound.playHarvest();
       this.ui.showToast(`💎 ${collected}/${total} treasures found!`);
     };
+    this.mapManager.onProximityHint = () => this.sound.playSelect();
 
     // Determine active character (default to Cozy low-poly kitty)
     let initialCharId = 'cozy';
@@ -197,6 +207,7 @@ class FarmGame {
     });
     // Wire adventure map obstacle colliders into physics
     this.playerPhysics.getAdventureColliders = () => this.mapManager.getActiveMap()?.getObstacleColliders() || [];
+    this.catEffects = new CatLifeParticles(this.scene);
 
     // Map System (Minimap HUD & Full World Map with Path Navigation)
     this.mapSystem = new MapSystem(this);
@@ -314,6 +325,7 @@ class FarmGame {
       this.controller.position.copy(prevPosition);
       this.controller.rotationAngle = prevRotation;
       this.controller.jumpOffset = prevJumpOffset;
+      this.catEffects.reset(prevPosition);
     }
 
     this.controller.onActionRequest = () => this.triggerAction();
@@ -426,7 +438,7 @@ class FarmGame {
     // Adventure Map Portals
     const nearPortal = this.mapManager.isNearFarmPortal(this.controller.position);
     if (nearPortal) {
-      this.travelToAdventureMap(nearPortal);
+      this.beginAdventureTravel(nearPortal);
       return;
     }
     if (this.mapManager.isNearReturnPortal(this.controller.position)) {
@@ -571,6 +583,12 @@ class FarmGame {
     }
   }
 
+  beginAdventureTravel(mapId) {
+    const cfg = this.mapManager.getPortalConfig(mapId);
+    if (!cfg || !this.mapManager.beginFarmPortalTravel(mapId)) return;
+    this.ui.showToast(`✨ ${cfg.name} 的傳送門正在蓄能…`);
+  }
+
   returnFromAdventureMap() {
     this.returnToFarm();
   }
@@ -590,7 +608,9 @@ class FarmGame {
       window.scrollTo(0, 0);
       this.camera.aspect = window.innerWidth / window.innerHeight;
       this.camera.updateProjectionMatrix();
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       this.renderer.setSize(window.innerWidth, window.innerHeight);
+      this.postProcessing.resize(window.innerWidth, window.innerHeight, this.renderer.getPixelRatio());
     });
     window.scrollTo(0, 0);
   }
@@ -601,7 +621,6 @@ class FarmGame {
     const delta = Math.min(this.clock.getDelta(), 0.1);
 
     // Update Cat Animations & Mood
-    this.cat.update(delta);
     if (this.ui) this.ui.updateMood(this.cat.mood);
 
     // Update Playable Items (Yarn Fur Balls, Catnip, Treats)
@@ -618,12 +637,35 @@ class FarmGame {
     }
 
     // Update Farm Ambient Animations
-    this.farm.update(delta);
+    this.farm.update(delta, this.controller.position);
     this.secretFishingSpot.update(delta);
-    this.mapManager.update(delta);
+    const completedPortalTravel = this.mapManager.update(delta, this.controller.position);
+    if (completedPortalTravel) {
+      this.travelToAdventureMap(completedPortalTravel);
+    }
+    const portalVisualState = this.mapManager.getPortalVisualState();
+    this.postProcessing.setPortalGodRays(portalVisualState.position, portalVisualState.intensity);
 
     this.farm.physics.update();
     this.playerPhysics.updatePlayerPhysics(delta);
+    const catPosition = this.controller.position;
+    const catSurface = !this.mapManager.isInAdventureMap()
+      ? this.farm.physics.surfaceAt(catPosition.x, catPosition.z)
+      : null;
+    const catMoving = this.catEffects.update(delta, {
+      position: catPosition,
+      grounded: this.controller.isGrounded,
+      sprinting: this.controller.keys.sprint,
+      surface: catSurface,
+      night: this.farm.lightingPreset === 'night',
+      visible: this.controller.viewMode === 'tps',
+    });
+    this.cat.update(delta, {
+      moving: catMoving,
+      grounded: this.controller.isGrounded,
+      sprinting: this.controller.keys.sprint,
+      aiming: this.controller.isShootingMode,
+    });
 
     // Adventure map interactions (collectibles, puzzles, all game-specific)
     if (this.mapManager.isInAdventureMap()) {
@@ -826,7 +868,8 @@ class FarmGame {
     }
 
     // Render Scene
-    this.renderer.render(this.scene, this.camera);
+    updateWaterSurfaces(this.scene, this.camera, delta);
+    this.postProcessing.render(delta, this.controller);
   }
 }
 

@@ -702,3 +702,201 @@
 .house-guide-actions button {
   flex: 1;
 }
+
+.top-hud-controls .pill-btn,
+.shop-btn,
+.menu-toggle-btn {
+  border: 1px solid rgba(255, 250, 231, 0.9) !important;
+  box-shadow: 0 6px 16px rgba(38, 47, 37, 0.2) !important;
+}
+
+.shop-btn {
+  background: linear-gradient(135deg, #d99a45, #bc6937) !important;
+}
+
+.menu-toggle-btn {
+  background: rgba(49, 62, 49, 0.64) !important;
+  color: #fff !important;
+  backdrop-filter: blur(12px);
+}
+
+.diamonds-badge {
+  background: rgba(239, 247, 239, 0.92) !important;
+  border-color: rgba(133, 173, 155, 0.65) !important;
+}
+
+.mood-badge {
+  background: rgba(250, 247, 235, 0.94) !important;
+  border-color: rgba(216, 132, 67, 0.38) !important;
+}
+
+.seed-quick-bar {
+  bottom: 78px;
+  max-width: min(820px, calc(100vw - 32px));
+  background: rgba(250, 247, 235, 0.94);
+  border: 1px solid rgba(255, 250, 231, 0.95);
+  box-shadow: 0 12px 28px rgba(31, 42, 31, 0.22), 0 2px 0 rgba(255, 255, 255, 0.65) inset;
+  gap: 10px;
+}
+
+.hotbar-label {
+  color: #405c43;
+  white-space: nowrap;
+}
+
+.seed-chips-container {
+  gap: 5px;
+}
+
+.seed-chip {
+  color: #4c473b;
+  background: rgba(95, 112, 78, 0.09);
+  border-color: transparent;
+  transition: transform 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.seed-chip:hover {
+  transform: translateY(-2px);
+  background: rgba(115, 153, 104, 0.18);
+}
+
+.seed-chip.active {
+  color: #fffdf2;
+  background: linear-gradient(135deg, #789b6c, #536e50);
+  border-color: rgba(64, 92, 67, 0.65);
+  box-shadow: 0 4px 10px rgba(64, 92, 67, 0.24);
+}
+
+.minimap-container {
+  border: 2px solid rgba(255, 250, 231, 0.92);
+  border-radius: 16px;
+  box-shadow: 0 10px 24px rgba(31, 42, 31, 0.25), 0 2px 0 rgba(255, 255, 255, 0.55) inset;
+}
+
+.minimap-header {
+  background: #435e48;
+}
+
+.quest-banner {
+  left: 198px;
+  max-width: min(460px, calc(100vw - 220px));
+}
+
+.minimap-footer {
+  background: #635d4d;
+}
+
+.shop-card,
+.world-map-card,
+.house-guide-card {
+  background: rgba(250, 247, 235, 0.98);
+  border: 2px solid rgba(255, 250, 231, 0.95);
+  box-shadow: 0 24px 64px rgba(27, 36, 28, 0.35);
+}
+
+.shop-item-card {
+  background: #fffdf5;
+  border-color: #e9dfc9;
+}
+
+.shop-item-card .buy-btn {
+  background: linear-gradient(135deg, #789b6c, #536e50);
+}
+
+.shop-tab.active {
+  background: #739968;
+}
+
+@media (max-width: 760px) {
+  .top-bar {
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    gap: 8px;
+    align-items: flex-start;
+  }
+
+  .brand {
+    padding: 7px 11px;
+  }
+
+  .game-title {
+    font-size: 0.98rem;
+  }
+
+  .stats-group {
+    gap: 5px;
+  }
+
+  .stat-badge {
+    padding: 7px 10px;
+    font-size: 0.9rem;
+  }
+
+  .top-hud-controls {
+    gap: 5px;
+  }
+
+  .top-hud-controls .pill-btn {
+    padding: 8px 10px;
+    font-size: 0.78rem;
+  }
+
+  .seed-quick-bar {
+    bottom: 82px;
+    width: calc(100vw - 24px);
+    overflow-x: auto;
+    justify-content: flex-start;
+    border-radius: 20px;
+  }
+
+  .quest-banner {
+    top: 210px;
+    left: 10px;
+    right: 10px;
+    max-width: none;
+  }
+
+  .seed-chip {
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 480px) {
+  .game-title {
+    font-size: 0.86rem;
+  }
+
+  .version-badge {
+    font-size: 0.62rem;
+  }
+
+  .stat-badge {
+    padding: 6px 8px;
+    font-size: 0.8rem;
+  }
+
+  .mood-bar-wrapper {
+    width: 36px;
+  }
+
+  .top-hud-controls .pill-btn {
+    padding: 7px 8px;
+    font-size: 0.7rem;
+  }
+
+  .minimap-container {
+    top: 68px;
+    left: 10px;
+    transform: scale(0.86);
+    transform-origin: top left;
+  }
+
+  .quest-banner {
+    top: 210px;
+    left: 10px;
+    right: 10px;
+    max-width: none;
+    padding: 8px 12px;
+  }
+}

@@ -1,7 +1,6 @@
 import * as THREE from 'three';
+import { CatCharacter } from '../character/CatCharacter.js';
 import { CAT_CHARACTERS, CHARACTER_LIST } from '../character/CatCharactersConfig.js';
-import { CatModelBuilder } from '../character/CatModelBuilder.js';
-import { CatAnimations } from '../character/CatAnimations.js';
 
 /**
  * Character Selection Page & 3D Interactive Turntable Manager
@@ -16,6 +15,7 @@ export class CharacterSelectManager {
     this.game = game;
     this.selectedId = 'cozy'; // Default to the low-poly cozy kitten.
     this.previewCat = null;
+    this.previewCharacter = null;
     this.previewMixer = null;
     this.previewActions = {};
     this.currentAnim = 'Idle';
@@ -166,45 +166,24 @@ export class CharacterSelectManager {
     if (!this.turntableScene) return;
 
     // Remove existing preview cat
-    if (this.previewCat) {
-      this.turntableScene.remove(this.previewCat);
-      if (this.previewMixer) {
-        this.previewMixer.stopAllAction();
-      }
-      this.previewCat = null;
+    if (this.previewCharacter) {
+      this.previewCharacter.dispose();
     }
 
-    const builder = new CatModelBuilder(characterId);
-    const { root } = builder.buildCatModel(characterId);
-    this.previewCat = root;
+    this.previewCharacter = new CatCharacter(this.turntableScene, characterId);
+    this.previewCat = this.previewCharacter.mesh;
     this.previewCat.position.set(0, 0, 0);
     this.previewCat.rotation.y = this.turntableRotation;
-    this.turntableScene.add(this.previewCat);
-
-    // Setup animations on the preview model
-    const clips = CatAnimations.getClips();
-    this.previewMixer = new THREE.AnimationMixer(this.previewCat);
-    this.previewActions = {};
-
-    clips.forEach(clip => {
-      const action = this.previewMixer.clipAction(clip);
-      this.previewActions[clip.name] = action;
-    });
-
-    if (this.previewActions[this.currentAnim]) {
-      this.previewActions[this.currentAnim].play();
-    } else if (this.previewActions['Idle']) {
-      this.previewActions['Idle'].play();
-    }
+    this.previewMixer = this.previewCharacter.mixer;
+    this.previewActions = this.previewCharacter.actions;
+    this.previewCharacter.playAnimation(this.previewActions[this.currentAnim] ? this.currentAnim : 'Idle', 0);
     this.handleResize();
   }
 
   playPreviewAnimation(animName) {
     if (!this.previewActions || !this.previewActions[animName]) return;
 
-    Object.values(this.previewActions).forEach(action => action.fadeOut(0.2));
-    const nextAction = this.previewActions[animName];
-    nextAction.reset().fadeIn(0.2).play();
+    this.previewCharacter.playAnimation(animName, 0.2);
     this.currentAnim = animName;
   }
 
@@ -448,8 +427,8 @@ export class CharacterSelectManager {
       this.previewCat.rotation.y = this.turntableRotation;
     }
 
-    if (this.previewMixer) {
-      this.previewMixer.update(delta);
+    if (this.previewCharacter) {
+      this.previewCharacter.update(delta);
     }
 
     if (this.turntableRenderer && this.turntableScene && this.turntableCamera) {

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { StylizedWater } from './StylizedWater.js';
 
 function makeGroundChunk(size = 12, color = 0xd9c29a) {
   const group = new THREE.Group();
@@ -99,22 +100,117 @@ function addLantern(group, x, y, z, color = 0xffd166) {
   group.add(glow);
 }
 
+function createPatternTexture(width, height, pixelColor) {
+  const data = new Uint8Array(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const index = (y * width + x) * 4;
+      const color = pixelColor(x, y);
+      data[index] = color.r;
+      data[index + 1] = color.g;
+      data[index + 2] = color.b;
+      data[index + 3] = 255;
+    }
+  }
+  const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function createHouseTextures() {
+  const wood = createPatternTexture(32, 32, (x, y) => {
+    const grain = Math.sin(x * 1.15 + y * 0.22) * 9;
+    const seam = y % 8 < 1 ? -28 : 0;
+    return { r: 143 + grain + seam, g: 89 + grain + seam, b: 49 + grain + seam };
+  });
+  wood.repeat.set(2.5, 2);
+
+  const brick = createPatternTexture(32, 32, (x, y) => {
+    const row = Math.floor(y / 8);
+    const mortar = y % 8 < 1 || (x + (row % 2) * 8) % 16 < 1;
+    const variation = ((x * 7 + y * 11) % 9) - 4;
+    return mortar
+      ? { r: 111, g: 87, b: 68 }
+      : { r: 178 + variation, g: 91 + variation, b: 59 + variation };
+  });
+  brick.repeat.set(2.6, 2);
+
+  const roof = createPatternTexture(32, 32, (x, y) => {
+    const row = Math.floor(y / 6);
+    const edge = y % 6 < 1 || (x + (row % 2) * 5) % 10 < 1;
+    const variation = ((x * 3 + y * 5) % 12) - 6;
+    return edge
+      ? { r: 73, g: 49, b: 43 }
+      : { r: 128 + variation, g: 69 + variation, b: 55 + variation };
+  });
+  roof.repeat.set(3.5, 2.5);
+
+  const normal = createPatternTexture(32, 32, (x, y) => {
+    const ridge = (x + y) % 8 < 2 ? 150 : 128;
+    return { r: ridge, g: 128, b: 255 };
+  });
+  normal.colorSpace = THREE.NoColorSpace;
+  normal.repeat.set(3, 3);
+  return { wood, brick, roof, normal };
+}
+
 export class CozySceneModels {
   static buildMainFarmsteadScene(options = {}) {
     const group = makeGroundChunk(11.5, 0xd8bf8a);
     group.position.set(0, 0, 0);
 
     const house = new THREE.Group();
-    const wallMat = new THREE.MeshStandardMaterial({ color: 0xf1ead8, roughness: 0.9, flatShading: true });
-    const roofMat = new THREE.MeshStandardMaterial({ color: 0xc75f42, roughness: 0.85, flatShading: true });
-    const trimMat = new THREE.MeshStandardMaterial({ color: 0x9d6b46, roughness: 0.9, flatShading: true });
+    house.name = 'Textured_Farmstead_House';
+    const textures = createHouseTextures();
+    const wallMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      map: textures.brick,
+      normalMap: textures.normal,
+      normalScale: new THREE.Vector2(0.3, 0.3),
+      roughness: 0.92,
+    });
+    const roofMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      map: textures.roof,
+      normalMap: textures.normal,
+      normalScale: new THREE.Vector2(0.45, 0.45),
+      roughness: 0.84,
+    });
+    const trimMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      map: textures.wood,
+      bumpMap: textures.normal,
+      bumpScale: 0.12,
+      roughness: 0.82,
+    });
     const chimneyMat = new THREE.MeshStandardMaterial({ color: 0x8d6d4f, roughness: 0.8, flatShading: true });
+    const glassMat = new THREE.MeshStandardMaterial({
+      color: 0x9bd4f2,
+      emissive: 0xffa85a,
+      emissiveIntensity: 1.5,
+      transparent: true,
+      opacity: 0.62,
+      roughness: 0.15,
+      metalness: 0.08,
+    });
 
-    const body = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.8, 2.5), wallMat);
-    body.position.set(0, 1.7, 0);
-    body.castShadow = true;
-    body.receiveShadow = true;
-    house.add(body);
+    const addWall = (width, height, depth, x, y, z) => {
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), wallMat);
+      wall.position.set(x, y, z);
+      wall.castShadow = true;
+      wall.receiveShadow = true;
+      house.add(wall);
+    };
+
+    // Four individual wall segments leave real openings for the entrance and windows.
+    addWall(3.2, 1.8, 0.18, 0, 1.7, -1.16);
+    addWall(0.18, 1.8, 2.5, -1.51, 1.7, 0);
+    addWall(0.18, 1.8, 2.5, 1.51, 1.7, 0);
+    addWall(0.92, 1.8, 0.18, -1.14, 1.7, 1.16);
+    addWall(0.92, 1.8, 0.18, 1.14, 1.7, 1.16);
+    addWall(1.04, 0.38, 0.18, 0, 2.41, 1.16);
 
     const roof = new THREE.Mesh(new THREE.ConeGeometry(2.5, 1.7, 4), roofMat);
     roof.position.set(0, 3.2, 0);
@@ -131,18 +227,55 @@ export class CozySceneModels {
     smoke.rotation.x = Math.PI;
     house.add(smoke);
 
-    const door = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.1, 0.12), trimMat);
-    door.position.set(0.2, 1.1, 1.28);
-    house.add(door);
+    const doorPivot = new THREE.Group();
+    doorPivot.name = 'Farmstead_Door_Pivot';
+    doorPivot.position.set(-0.5, 0.82, 1.27);
+    const door = new THREE.Mesh(new THREE.PlaneGeometry(1, 1.55), trimMat);
+    door.name = 'Farmstead_Door';
+    door.position.set(0.5, 0.775, 0);
+    door.castShadow = true;
+    door.receiveShadow = true;
+    doorPivot.add(door);
+    const handle = new THREE.Mesh(
+      new THREE.SphereGeometry(0.045, 8, 6),
+      new THREE.MeshStandardMaterial({ color: 0xd9ad4a, metalness: 0.75, roughness: 0.24 })
+    );
+    handle.position.set(0.82, 0.77, 0.035);
+    doorPivot.add(handle);
+    house.add(doorPivot);
 
     for (let x = -1; x <= 1; x += 2) {
-      const win = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.08), trimMat);
-      win.position.set(x * 1.1, 2.0, 1.28);
-      house.add(win);
+      const windowGroup = new THREE.Group();
+      windowGroup.position.set(x * 1.08, 1.95, 1.27);
+      const win = new THREE.Mesh(new THREE.PlaneGeometry(0.52, 0.62), glassMat);
+      win.name = 'Farmstead_Emissive_Window';
+      windowGroup.add(win);
+      const sill = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.08, 0.1), trimMat);
+      sill.position.set(0, -0.36, 0.02);
+      windowGroup.add(sill);
+      for (const [barX, barY, barWidth, barHeight] of [[0, 0, 0.05, 0.66], [0, 0, 0.58, 0.05]]) {
+        const bar = new THREE.Mesh(new THREE.BoxGeometry(barWidth, barHeight, 0.06), trimMat);
+        bar.position.set(barX, barY, 0.02);
+        windowGroup.add(bar);
+      }
+      house.add(windowGroup);
     }
+
+    const interiorLight = new THREE.PointLight(0xffb36a, 2.2, 7, 1.7);
+    interiorLight.position.set(0, 2.1, 0.25);
+    interiorLight.castShadow = true;
+    interiorLight.shadow.mapSize.set(512, 512);
+    house.add(interiorLight);
 
     house.position.set(-0.8, 0.9, -1.1);
     group.add(house);
+    group.userData.update = (delta, playerPosition) => {
+      if (!playerPosition) return;
+      const entrance = new THREE.Vector3();
+      doorPivot.getWorldPosition(entrance);
+      const targetAngle = entrance.distanceToSquared(playerPosition) < 12.25 ? -Math.PI * 0.68 : 0;
+      doorPivot.rotation.y = THREE.MathUtils.damp(doorPivot.rotation.y, targetAngle, 5, delta);
+    };
 
     const soil = new THREE.Mesh(
       new THREE.BoxGeometry(4.8, 0.38, 2.2),
@@ -495,12 +628,17 @@ export class CozySceneModels {
   static buildRiverDockScene(options = {}) {
     const group = makeGroundChunk(12, 0xbdd6a2);
 
+    const bankMaterial = new THREE.MeshStandardMaterial({ color: 0x477f77, roughness: 0.9, flatShading: true });
+    const openTop = new THREE.MeshBasicMaterial({ visible: false });
     const water = new THREE.Mesh(
       new THREE.BoxGeometry(7.5, 0.6, 3.5),
-      new THREE.MeshStandardMaterial({ color: 0x67d4e8, roughness: 0.2, flatShading: true, transparent: true, opacity: 0.9 })
+      [bankMaterial, bankMaterial, openTop, bankMaterial, bankMaterial, bankMaterial]
     );
     water.position.set(2.4, 0.8, -2.8);
     group.add(water);
+    const waterSurface = new StylizedWater(new THREE.PlaneGeometry(7.5, 3.5), { scale: 3 });
+    waterSurface.position.set(2.4, 0.99, -2.8);
+    group.add(waterSurface);
 
     const dock = new THREE.Group();
     const woodMat = new THREE.MeshStandardMaterial({ color: 0x7a4d2a, roughness: 0.9, flatShading: true });

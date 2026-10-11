@@ -21,7 +21,21 @@ A web-ready, lightweight, and low-poly 3D game scene and character asset bundle 
   - Cozy Pond with water lily pads, blossoms, and wooden fishing dock
   - Raised Garden Beds with harvestable **Carrots**, **Pumpkins**, **Cabbages**, and **Sunflowers**
   - Wildflowers (yellow, red, purple) and red-capped mushrooms
-- **PBR & Ambient Lighting**: Baked-style soft hemisphere lighting + warm directional sunlight with smooth shadow cascades.
+- **PBR & Ambient Lighting**: Hemisphere and ambient fill lighting + directional sunlight with a 2048px PCF soft shadow map.
+
+### Visual Effects
+
+- Lakes and ponds use `Water2` with procedural, repeating normal maps and a gentle normal-based ripple shader. No external water images are downloaded, and surface vertices stay planar so lily pads, boats and collision heights remain stable.
+- Water is integrated into the farm pond, secret fishing pond, Mystic Lake and river-dock diorama. Faceted shorelines and original basin footprints remain low-poly; the secret pond's bank is an open ring rather than a solid lid covering its water.
+- Managed reflection/refraction targets are **256px** for small water surfaces and **512px** for Mystic Lake. At most one pair updates per game frame, each surface is capped at **20 captures/sec**, and hidden, back-facing or more-than-65-unit-distant surfaces do not capture. Distant uncaptured water uses an intentional teal LOD.
+- Water captures exclude other managed water surfaces to prevent recursive rendering. Bokeh's depth pass does not initiate captures, and every water owner exposes `dispose()` to release its targets and textures.
+
+- The 3D scene uses `EffectComposer`: `RenderPass` -> `BokehPass` -> `UnrealBloomPass` -> `OutputPass`. The final pass applies ACES tone mapping and sRGB output once; HTML HUD elements remain sharp.
+- Bloom uses strength **0.24**, radius **0.35**, and a linear HDR threshold of **1.1**. Fire cores, lantern glass, and sparks have HDR colors so these light sources bloom without brightening ordinary terrain and props.
+- Third-person depth of field follows the player's view-space depth, with aperture **0.00012** and maximum blur **0.003**. It pauses in FPS or while aiming and defaults off on coarse-pointer/touch devices.
+- Open **Menu -> Model Viewer -> Visual Effects** to independently toggle Bloom and depth of field. Settings last for the current game session.
+- Campfire sparks use one reusable `Points`/`BufferGeometry`/`PointsMaterial` batch with 32 particles per fire and a procedural soft sprite. Position and color buffers update in place; no per-frame mesh allocation is needed. Decorative particles use camera layer 1 and are excluded from the bokeh depth pass.
+- Post-processing resolution is capped at 1.5 device pixels per CSS pixel and tracks window resizing; WebGL2 uses 4x MSAA for the scene input.
 
 ---
 
@@ -31,6 +45,18 @@ A web-ready, lightweight, and low-poly 3D game scene and character asset bundle 
 2. **`Walk`**: Bipedal waddling walk cycle with hip roll, alternating leg swings, arm pumping, and head bobbing.
 3. **`Action`**: Combat shooting stance with peashooter plant-gun muzzle charge, recoil shockwave, and projectile launch.
 4. **`Gather`**: Bending down to ground level with forward paws plucking ripe vegetables, followed by a happy standing flourish.
+5. **`HappyRun` / `Sleeping`**: Energetic trotting and a curled-up breathing sleep pose.
+6. **`Stretch` / `Groom`**: Alternating idle gestures after five seconds of stillness; movement or gameplay actions interrupt them.
+7. **`Jump`**: Tucked legs and balancing paws while airborne, blending back to locomotion on landing.
+8. **`Blink` / `EarTwitch`**: Brief eye blinks and an additive ear reaction when shooting or gathering. The game layers these over the main animation.
+
+### Living Kitty Details
+
+- Existing fur colors and tabby textures are preserved, with a small directional bump texture on non-Pearl coats. Pearl keeps its existing strand/bump treatment.
+- Eyes use nonmetallic clear-coated physical materials. Open-eyed cats have small emissive catchlights that work with Bloom; closed-eyed styles retain their sleepy look.
+- Idle, locomotion and gestures use the existing hierarchical ear/tail/paw rig and `AnimationMixer`, not a replacement `SkinnedMesh`. Animation clips remain available in the character preview and GLB export; additive playback must be configured by the importing application.
+- Sprinting across classified farm grass releases short-lived leaf particles. Roads, stationary movement, airborne jumps and adventure surfaces do not emit leaves. A small halo of motes follows the cat at night; both particle effects hide in FPS.
+- Particle buffers are pooled, and switching characters/previews releases the old model's geometries, materials and textures.
 
 ---
 
@@ -52,7 +78,7 @@ Open the in-game **Model Viewer (🔍)** to:
 - Test and switch between `Idle`, `Walk`, `Action`, and `Gather` animation clips.
 - Toggle helmet, bandana, and peashooter visibility.
 - Test different lighting presets (Day, Sunset, Night, Studio).
-- Click **"Download Character .GLB"** to export the model with all 4 embedded animation clips.
+- Click **"Download Character .GLB"** to export the model with all embedded animation clips.
 - Click **"Download Full Farm Scene .GLB"** to export the entire 3D world.
 
 ---
