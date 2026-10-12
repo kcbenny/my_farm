@@ -106,9 +106,80 @@ export class TreeModelBuilder {
     ], 3));
     leafGeometry.setIndex([0, 1, 6, 1, 2, 6, 2, 3, 6, 3, 4, 6, 4, 5, 6, 5, 0, 6]);
     leafGeometry.computeVertexNormals();
-    const leafMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.DoubleSide, roughness: 0.85, flatShading: true });
+
+    // Add wind sway factor attribute (0 at base, 1 at tip) for per-vertex wind bending
+    const positions = leafGeometry.attributes.position.array;
+    const swayFactors = new Float32Array(positions.length / 3);
+    for (let i = 0; i < positions.length / 3; i++) {
+      const y = positions[i * 3 + 1];
+      swayFactors[i] = y * y; // non-linear, more sway at tips
+    }
+    leafGeometry.setAttribute('aSwayFactor', new THREE.BufferAttribute(swayFactors, 1));
+
     const perCluster = type === 'pine' ? 85 : (type === 'birch' ? 100 : 170);
-    const leaves = new THREE.InstancedMesh(leafGeometry, leafMaterial, clusters.length * perCluster);
+    const totalLeaves = clusters.length * perCluster;
+
+    // Per-instance wind phase for leaf-level variation
+    const leafPhases = new Float32Array(totalLeaves);
+    const leafAmplitudes = new Float32Array(totalLeaves);
+
+    const leafMaterial = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      side: THREE.DoubleSide,
+      roughness: 0.8,
+      metalness: 0.0,
+      flatShading: false,
+      vertexColors: true,
+      onBeforeCompile: (shader) => {
+        shader.uniforms.uWindTime = { value: 0 };
+        shader.uniforms.uWindStrength = { value: 1.0 };
+        shader.uniforms.uWindDir = { value: new THREE.Vector2(1.0, 0.6) };
+
+        // Add attributes and uniforms
+        shader.vertexShader = shader.vertexShader
+          .replace(
+            '#include <common>',
+            `#include <common>
+            attribute float aSwayFactor;
+            uniform float uWindTime;
+            uniform float uWindStrength;
+            uniform vec2 uWindDir;
+            attribute float instancePhase;
+            attribute float instanceAmplitude;`
+          )
+          .replace(
+            '#include <begin_vertex>',
+            `#include <begin_vertex>
+            // Wind sway calculation
+            float worldX = (instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).x;
+            float worldZ = (instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).z;
+
+            // Multi-frequency wind for natural leaf flutter
+            float wave1 = sin(worldX * 0.2 + worldZ * 0.15 + uWindTime * 1.5 + instancePhase) * 0.5 + 0.5;
+            float wave2 = sin(worldX * 0.5 - worldZ * 0.3 + uWindTime * 2.5 + instancePhase * 1.7) * 0.5 + 0.5;
+            float wave3 = sin(worldX * 0.9 + worldZ * 0.7 + uWindTime * 3.5 + instancePhase * 2.3) * 0.5 + 0.5;
+
+            float windAmount = (wave1 * 0.5 + wave2 * 0.3 + wave3 * 0.2) * uWindStrength * aSwayFactor * instanceAmplitude;
+
+            // Primary sway along wind direction
+            transformed.x += uWindDir.x * windAmount * 0.4;
+            transformed.z += uWindDir.y * windAmount * 0.4;
+
+            // Secondary twist / flutter perpendicular to wind
+            float flutter = sin(uWindTime * 3.0 + instancePhase * 4.0 + worldX * 0.3) * 0.15 * aSwayFactor * uWindStrength;
+            transformed.x += -uWindDir.y * flutter;
+            transformed.z += uWindDir.x * flutter;
+
+            // Slight upward lift with wind
+            transformed.y += windAmount * 0.1;`
+          );
+
+        // Store reference for animation
+        leafMaterial.userData.shader = shader;
+      },
+    });
+
+    const leaves = new THREE.InstancedMesh(leafGeometry, leafMaterial, totalLeaves);
     leaves.name = 'Individual_Leaves';
     leaves.castShadow = true;
     leaves.receiveShadow = true;
@@ -129,11 +200,24 @@ export class TreeModelBuilder {
         transform.scale.set(type === 'willow' || type === 'pine' ? length * 0.4 : length, length, length);
         transform.updateMatrix();
         leaves.setMatrixAt(leafIndex, transform.matrix);
-        leaves.setColorAt(leafIndex++, palette[Math.floor(random() * palette.length)]);
+        leaves.setColorAt(leafIndex, palette[Math.floor(random() * palette.length)]);
+
+        // Per-leaf wind data
+        leafPhases[leafIndex] = random() * Math.PI * 2;
+        leafAmplitudes[leafIndex] = 0.7 + random() * 0.6; // 0.7 - 1.3
+
         if (leaf % 15 === 0) foliagePoints.push(transform.position.clone());
+        leafIndex++;
       }
     });
+
+    // Add instance attributes for wind
+    leaves.geometry.setAttribute('instancePhase', new THREE.InstancedBufferAttribute(leafPhases, 1));
+    leaves.geometry.setAttribute('instanceAmplitude', new THREE.InstancedBufferAttribute(leafAmplitudes, 1));
+
     crown.add(leaves);
+    crown.userData.leafMesh = leaves;
+    crown.userData.leafMaterial = leafMaterial;
 
     if (type === 'oak') {
       const puffs = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0), leafMaterial, clusters.length * 5);

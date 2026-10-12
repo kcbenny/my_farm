@@ -6,6 +6,7 @@ import { ShopStallModel } from './ShopStallModel.js';
 import { CozySceneModels } from './CozySceneModels.js';
 import { ModularTileSystem } from './ModularTileSystem.js';
 import { TreeModelBuilder } from './TreeModelBuilder.js';
+import { GrassField } from './GrassField.js';
 import { WorldPhysics, normalizeAsset } from '../gameplay/WorldPhysics.js';
 import { CampfireParticles } from './CampfireParticles.js';
 
@@ -127,6 +128,9 @@ export class FarmEnvironment {
 
     // 7. Stylized Low-Poly Trees
     this.createForestAndTrees();
+
+    // 7b. Grass field with wind sway
+    this.createGrassField();
 
     // 8. Fences along borders and farm plots
     this.createFences();
@@ -685,6 +689,42 @@ export class FarmEnvironment {
     return this.physics.intersectsPlayer(feet, radius, radius * 2);
   }
 
+  createGrassField() {
+    // Define areas to avoid (buildings, paths, garden beds, pond)
+    const avoidPoints = [
+      // Barn
+      { x: -14, z: -22, radius: 8 },
+      // Windmill
+      { x: 22, z: -16, radius: 7 },
+      // Shop stall
+      { x: -10, z: -4, radius: 5 },
+      // Pond
+      { x: -18, z: 10, radius: 6 },
+      // Garden beds area
+      { x: 2, z: -8, radius: 6 },
+      // Campfire area
+      { x: -6, z: 6, radius: 4 },
+      // Modular display
+      { x: 14, z: 6, radius: 5 },
+    ];
+
+    // Also add tree positions as avoid points
+    this.trees.forEach(tree => {
+      avoidPoints.push({ x: tree.position.x, z: tree.position.z, radius: 2.5 });
+    });
+
+    this.grassField = GrassField.create(this.scene, this.getTerrainHeight.bind(this), {
+      bladeCount: 12000,
+      spreadRadius: 45,
+      minHeight: 0.15,
+      maxHeight: 0.55,
+      windStrength: 0.45,
+      windSpeed: 0.7,
+      flowerRatio: 0.03,
+      avoidPoints,
+    });
+  }
+
   createDecorations() {
     const decoGroup = new THREE.Group();
     decoGroup.name = 'Flora_Decorations';
@@ -1076,9 +1116,9 @@ export class FarmEnvironment {
         moonIntensity: 0, background: 0xf77f00, fog: 0xf77f00, fogDensity: 0.015,
       },
       night: {
-        ambient: 0.15, hemi: 0.45, sky: 0x1a237e, ground: 0x3d5c3d,
+        ambient: 0.1, hemi: 0.3, sky: 0x1a237e, ground: 0x3d5c3d,
         sun: 0x4a6fa5, sunIntensity: 0.05, sunOffset: [-20, 35, -20],
-        moonIntensity: 0.65, background: 0x131b3e, fog: 0x131b3e, fogDensity: 0.008,
+        moonIntensity: 0.4, background: 0x131b3e, fog: 0x131b3e, fogDensity: 0.008,
       },
       studio: {
         ambient: 0.1, hemi: 0.55, sky: 0xffffff, ground: 0xcccccc,
@@ -1167,9 +1207,34 @@ export class FarmEnvironment {
       const tree = this.trees[i];
       const crown = tree.getObjectByName('Tree_Crown');
       if (crown) {
-        crown.rotation.z = Math.sin(time + tree.userData.windPhase) * 0.012;
-        crown.rotation.x = Math.cos(time * 0.7 + tree.userData.windPhase) * 0.008;
+        const phase = tree.userData.windPhase || 0;
+        // Enhanced crown sway - stronger amplitude, multi-frequency
+        const swayX = Math.sin(time * 0.8 + phase) * 0.035 + Math.sin(time * 1.5 + phase * 1.3) * 0.015;
+        const swayZ = Math.cos(time * 0.6 + phase * 0.7) * 0.025 + Math.cos(time * 1.2 + phase * 1.1) * 0.012;
+        crown.rotation.z = swayX;
+        crown.rotation.x = swayZ;
+
+        // Slight vertical breathing
+        crown.position.y = Math.sin(time * 0.5 + phase) * 0.02;
+
+        // Update leaf shader wind time if available
+        const leafMat = crown.userData.leafMaterial;
+        if (leafMat && leafMat.userData && leafMat.userData.shader) {
+          const shader = leafMat.userData.shader;
+          shader.uniforms.uWindTime.value = time * 0.5;
+          // Wind strength varies with gusts
+          const gust = 0.8 + Math.sin(time * 0.7 + phase) * 0.3 + Math.sin(time * 1.3 + phase * 0.5) * 0.15;
+          shader.uniforms.uWindStrength.value = gust;
+          // Wind direction slowly shifts
+          const windAngle = Math.sin(time * 0.05) * 0.3 + phase * 0.1;
+          shader.uniforms.uWindDir.value.set(Math.cos(windAngle), Math.sin(windAngle) * 0.6);
+        }
       }
+    }
+
+    // Update grass field wind animation
+    if (this.grassField) {
+      this.grassField.update(delta);
     }
 
     // Animate Campfires Flickering & Embers
