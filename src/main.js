@@ -73,7 +73,7 @@ class FarmGame {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.toneMappingExposure = 1.0;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     this.container.appendChild(this.renderer.domElement);
@@ -246,7 +246,7 @@ class FarmGame {
     let timeLabel = 'Daylight';
 
     if (hour >= 5 && hour < 8) {
-      preset = 'sunset'; // Dawn / Sunrise
+      preset = 'dawn';
       timeLabel = 'Dawn Sunrise 🌅';
     } else if (hour >= 8 && hour < 17) {
       preset = 'day';    // Day / Noon
@@ -638,6 +638,7 @@ class FarmGame {
 
     // Update Farm Ambient Animations
     this.farm.update(delta, this.controller.position);
+    this.postProcessing.updateLighting(this.farm.lightingPreset, delta);
     this.secretFishingSpot.update(delta);
     const completedPortalTravel = this.mapManager.update(delta, this.controller.position);
     if (completedPortalTravel) {

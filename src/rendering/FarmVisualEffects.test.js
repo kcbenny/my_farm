@@ -65,8 +65,9 @@ test('composer orders depth, bloom and output correctly and resizes all targets'
   assert.deepEqual(effects.composer.passes, [
     effects.renderPass, effects.bokehPass, effects.bloomPass, effects.godRaysPass, effects.outputPass,
   ]);
-  assert.equal(effects.bloomPass.strength, 0.24);
-  assert.equal(effects.bloomPass.threshold, 1.1);
+  assert.equal(effects.bloomPass.strength, 0.4);
+  assert.equal(effects.bloomPass.radius, 0.5);
+  assert.equal(effects.bloomPass.threshold, 0.85);
   assert.equal(effects.bokehPass.uniforms.maxblur.value, 0.003);
   effects.resize(800, 450, 2);
   assert.equal(effects.composer.renderTarget1.width, 1200);
@@ -122,6 +123,19 @@ test('touch-device configuration starts without depth of field', () => {
   effects.dispose();
 });
 
+test('exposure and bloom transition to a brighter night treatment', () => {
+  const renderer = { capabilities: { isWebGL2: true }, getPixelRatio: () => 1 };
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
+  const effects = new FarmPostProcessing(renderer, new THREE.Scene(), camera);
+  effects.updateLighting('night', 10);
+  assert.ok(Math.abs(renderer.toneMappingExposure - 0.3) < 0.001);
+  assert.ok(Math.abs(effects.bloomPass.strength - 0.8) < 0.001);
+  effects.updateLighting('day', 10);
+  assert.ok(Math.abs(renderer.toneMappingExposure - 1) < 0.001);
+  assert.ok(Math.abs(effects.bloomPass.strength - 0.4) < 0.001);
+  effects.dispose();
+});
+
 test('portal god rays project an active portal source into the composer shader', () => {
   const { effects, camera } = createPostProcessing();
   camera.position.set(0, 1.4, 6);
@@ -172,9 +186,31 @@ test('lighting includes directional shadows and ambient fill in every preset', (
   assert.equal(farm.sunLight.castShadow, true);
   assert.equal(farm.sunLight.shadow.mapSize.width, 2048);
   assert.ok(farm.ambientLight.isAmbientLight);
-  for (const preset of ['day', 'sunset', 'night', 'studio']) {
+  for (const preset of ['day', 'dawn', 'sunset', 'night', 'studio']) {
     farm.setLightingPreset(preset);
     assert.ok(farm.ambientLight.intensity > 0 && farm.ambientLight.intensity <= 0.25);
     assert.ok(farm.sunLight.intensity > 0);
   }
+});
+
+test('night lighting adds moon fill and shadow camera follows the player without texel jitter', () => {
+  const farm = Object.create(FarmEnvironment.prototype);
+  farm.scene = new THREE.Scene();
+  farm.createAmbientMotes = () => {};
+  farm.setupLighting();
+  farm.setLightingPreset('night');
+  farm.updateLighting(10);
+  assert.ok(Math.abs(farm.moonLight.intensity - 0.4) < 0.00001);
+  assert.ok(Math.abs(farm.hemiLight.intensity - 0.3) < 0.00001);
+  assert.ok(Math.abs(farm.scene.fog.density - 0.008) < 0.00001);
+
+  const position = new THREE.Vector3(13.127, 2, -9.891);
+  farm.updateShadowFollow(position);
+  const texelSize = 70 / farm.sunLight.shadow.mapSize.width;
+  assert.ok(Math.abs(farm.sunLightTarget.x / texelSize - Math.round(farm.sunLightTarget.x / texelSize)) < 1e-8);
+  assert.ok(Math.abs(farm.sunLightTarget.z / texelSize - Math.round(farm.sunLightTarget.z / texelSize)) < 1e-8);
+  assert.ok(farm.sunLight.position.distanceTo(farm.sunLightTarget) > 40);
+  const snappedPosition = farm.sunLightTarget.clone();
+  farm.updateShadowFollow(position.clone().add(new THREE.Vector3(0.001, 0, 0.001)));
+  assert.ok(farm.sunLightTarget.distanceTo(snappedPosition) < 1e-8);
 });

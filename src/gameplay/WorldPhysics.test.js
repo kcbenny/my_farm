@@ -302,7 +302,8 @@ test('faceted terrain retains the farm boundary and has a separate rocky mountai
   assert.ok(farm.getTerrainHeight(33, -30) > 5);
   farm.setupLighting();
   farm.setLightingPreset('day');
-  assert.ok(farm.scene.fog.density < 0.004);
+  farm.updateLighting(10);
+  assert.ok(farm.scene.fog.density < 0.006);
   const backdropVertices = farm.mountainMesh.geometry.attributes.position;
   const boundaryHeights = new Map();
   for (let index = 0; index < backdropVertices.count; index++) {

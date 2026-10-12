@@ -959,15 +959,13 @@ export class FarmEnvironment {
   }
 
   setupLighting() {
-    // Soft ambient fill keeps the low-poly facets readable without washing out their colors.
-    this.hemiLight = new THREE.HemisphereLight(0xd6edff, 0x66734d, 1.05);
+    this.hemiLight = new THREE.HemisphereLight(0x87ceeb, 0x3d5c3d, 0.5);
     this.hemiLight.position.set(0, 50, 0);
     this.scene.add(this.hemiLight);
-    this.ambientLight = new THREE.AmbientLight(0xffead3, 0.22);
+    this.ambientLight = new THREE.AmbientLight(0xffffff, 0.1);
     this.scene.add(this.ambientLight);
 
-    // A warm, low-angle sun gives props and terrain a consistent soft-shadow direction.
-    this.sunLight = new THREE.DirectionalLight(0xffe2ad, 2.0);
+    this.sunLight = new THREE.DirectionalLight(0xfff5e6, 2.1);
     this.sunLight.position.set(25, 40, 20);
     this.sunLight.castShadow = true;
     this.sunLight.shadow.mapSize.width = 2048;
@@ -980,12 +978,25 @@ export class FarmEnvironment {
     this.sunLight.shadow.camera.right = d;
     this.sunLight.shadow.camera.top = d;
     this.sunLight.shadow.camera.bottom = -d;
-    this.sunLight.shadow.bias = -0.00015;
-    this.sunLight.shadow.normalBias = 0.035;
+    this.sunLight.shadow.bias = -0.0005;
+    this.sunLight.shadow.normalBias = 0.02;
     this.sunLight.shadow.radius = 4;
     this.sunLight.shadow.camera.updateProjectionMatrix();
-
+    this.sunLightOffset = new THREE.Vector3(25, 40, 20);
+    this.sunLightTarget = new THREE.Vector3();
+    this.sunLight.target.position.copy(this.sunLightTarget);
+    this.scene.add(this.sunLight.target);
     this.scene.add(this.sunLight);
+
+    this.moonLight = new THREE.DirectionalLight(0xa8c8ff, 0);
+    this.moonLight.position.set(-20, 35, -20);
+    this.moonLightColor = new THREE.Color(0xa8c8ff);
+    this.moonLightOffset = new THREE.Vector3(-20, 35, -20);
+    this.moonLight.target.position.set(0, 0, 0);
+    this.scene.add(this.moonLight.target, this.moonLight);
+
+    this.lightingPreset = 'day';
+    this.setLightingPreset('day');
     this.createAmbientMotes();
   }
 
@@ -1048,55 +1059,95 @@ export class FarmEnvironment {
   }
 
   setLightingPreset(preset) {
+    const presets = {
+      day: {
+        ambient: 0.1, hemi: 0.5, sky: 0x87ceeb, ground: 0x3d5c3d,
+        sun: 0xfff5e6, sunIntensity: 2.1, sunOffset: [25, 40, 20],
+        moonIntensity: 0, background: 0x78b5e7, fog: 0x78b5e7, fogDensity: 0.005,
+      },
+      dawn: {
+        ambient: 0.1, hemi: 0.45, sky: 0xffb070, ground: 0x3d5c3d,
+        sun: 0xffb070, sunIntensity: 1.9, sunOffset: [24, 22, 20],
+        moonIntensity: 0, background: 0xf2a36b, fog: 0xf2a36b, fogDensity: 0.015,
+      },
+      sunset: {
+        ambient: 0.1, hemi: 0.4, sky: 0xffba78, ground: 0x3d5c3d,
+        sun: 0xff8c42, sunIntensity: 1.8, sunOffset: [40, 15, 10],
+        moonIntensity: 0, background: 0xf77f00, fog: 0xf77f00, fogDensity: 0.015,
+      },
+      night: {
+        ambient: 0.1, hemi: 0.3, sky: 0x1a237e, ground: 0x3d5c3d,
+        sun: 0x4a6fa5, sunIntensity: 0.05, sunOffset: [-20, 35, -20],
+        moonIntensity: 0.4, background: 0x131b3e, fog: 0x131b3e, fogDensity: 0.008,
+      },
+      studio: {
+        ambient: 0.1, hemi: 0.55, sky: 0xffffff, ground: 0xcccccc,
+        sun: 0xffffff, sunIntensity: 2, sunOffset: [10, 20, 15],
+        moonIntensity: 0, background: 0x2b2d42, fog: null, fogDensity: 0,
+      },
+    };
+    const target = presets[preset];
+    if (!target) throw new RangeError(`Unknown lighting preset: ${preset}`);
+
     this.lightingPreset = preset;
-    if (preset === 'day') {
-      this.ambientLight.color.setHex(0xffead3);
-      this.ambientLight.intensity = 0.22;
-      this.hemiLight.color.setHex(0xbde0fe);
-      this.hemiLight.groundColor.setHex(0x588157);
-      this.hemiLight.intensity = 1.2;
-      this.sunLight.color.setHex(0xfff3b0);
-      this.sunLight.intensity = 1.8;
-      this.sunLight.position.set(25, 40, 20);
-      this.scene.background = new THREE.Color(0x78b5e7);
-      this.scene.fog = new THREE.FogExp2(0x78b5e7, 0.0032);
-    } else if (preset === 'sunset') {
-      this.ambientLight.color.setHex(0xffd3af);
-      this.ambientLight.intensity = 0.18;
-      this.hemiLight.color.setHex(0xffaa5e);
-      this.hemiLight.groundColor.setHex(0x54473f);
-      this.hemiLight.intensity = 1.0;
-      this.sunLight.color.setHex(0xff6b35);
-      this.sunLight.intensity = 2.2;
-      this.sunLight.position.set(40, 15, 10);
-      this.scene.background = new THREE.Color(0xf77f00);
-      this.scene.fog = new THREE.FogExp2(0xf77f00, 0.018);
-    } else if (preset === 'night') {
-      this.ambientLight.color.setHex(0xc5d2ed);
-      this.ambientLight.intensity = 0.16;
-      this.hemiLight.color.setHex(0x52b788);      // Soft moonlight cyan-green sky glow
-      this.hemiLight.groundColor.setHex(0x2d6a4f); // Warm night grass ambient glow
-      this.hemiLight.intensity = 1.1;             // Bright, clear moonlight ambient!
-      this.sunLight.color.setHex(0xade8f4);       // Soft blue moonlight
-      this.sunLight.intensity = 1.4;              // Bright, visible directional moon light!
-      this.sunLight.position.set(-20, 35, -20);
-      this.scene.background = new THREE.Color(0x131b3e); // Deep cozy indigo night sky
-      this.scene.fog = new THREE.FogExp2(0x131b3e, 0.008); // Light soft fog so everything is clearly visible!
-    } else if (preset === 'studio') {
-      this.ambientLight.color.setHex(0xffffff);
-      this.ambientLight.intensity = 0.25;
-      this.hemiLight.color.setHex(0xffffff);
-      this.hemiLight.groundColor.setHex(0xcccccc);
-      this.hemiLight.intensity = 1.5;
-      this.sunLight.color.setHex(0xffffff);
-      this.sunLight.intensity = 2.0;
-      this.sunLight.position.set(10, 20, 15);
-      this.scene.background = new THREE.Color(0x2b2d42);
+    this.lightingTarget = {
+      ambient: target.ambient,
+      hemi: target.hemi,
+      sky: new THREE.Color(target.sky),
+      ground: new THREE.Color(target.ground),
+      sun: new THREE.Color(target.sun),
+      sunIntensity: target.sunIntensity,
+      sunOffset: new THREE.Vector3(...target.sunOffset),
+      moonIntensity: target.moonIntensity,
+      background: new THREE.Color(target.background),
+      fog: target.fog === null ? null : new THREE.Color(target.fog),
+      fogDensity: target.fogDensity,
+    };
+  }
+
+  updateLighting(delta) {
+    if (!this.lightingTarget) return;
+    const blend = 1 - Math.exp(-delta * 1.5);
+    const target = this.lightingTarget;
+    this.ambientLight.intensity = THREE.MathUtils.damp(this.ambientLight.intensity, target.ambient, 1.5, delta);
+    this.hemiLight.intensity = THREE.MathUtils.damp(this.hemiLight.intensity, target.hemi, 1.5, delta);
+    this.hemiLight.color.lerp(target.sky, blend);
+    this.hemiLight.groundColor.lerp(target.ground, blend);
+    this.sunLight.color.lerp(target.sun, blend);
+    this.sunLight.intensity = THREE.MathUtils.damp(this.sunLight.intensity, target.sunIntensity, 1.5, delta);
+    this.sunLightOffset.lerp(target.sunOffset, blend);
+    this.moonLight.intensity = THREE.MathUtils.damp(this.moonLight.intensity, target.moonIntensity, 1.5, delta);
+    this.moonLight.color.lerp(this.moonLightColor, blend);
+
+    if (this.scene.background?.isColor) this.scene.background.lerp(target.background, blend);
+    if (!target.fog) {
       this.scene.fog = null;
+    } else {
+      if (!this.scene.fog?.isFogExp2) this.scene.fog = new THREE.FogExp2(target.fog, target.fogDensity);
+      this.scene.fog.color.lerp(target.fog, blend);
+      this.scene.fog.density = THREE.MathUtils.damp(this.scene.fog.density, target.fogDensity, 1.5, delta);
     }
   }
 
+  updateShadowFollow(playerPosition) {
+    if (!playerPosition) return;
+    const camera = this.sunLight.shadow.camera;
+    const texelSize = (camera.right - camera.left) / this.sunLight.shadow.mapSize.width;
+    const target = this.sunLightTarget;
+    target.set(
+      Math.round(playerPosition.x / texelSize) * texelSize,
+      playerPosition.y,
+      Math.round(playerPosition.z / texelSize) * texelSize
+    );
+    this.sunLight.target.position.copy(target);
+    this.sunLight.position.copy(target).add(this.sunLightOffset);
+    this.moonLight.target.position.copy(target);
+    this.moonLight.position.copy(target).add(this.moonLightOffset);
+  }
+
   update(delta, playerPosition = null) {
+    this.updateLighting(delta);
+    this.updateShadowFollow(playerPosition);
     if (this.pollenMotes) {
       this.pollenMotes.material.uniforms.uTime.value += delta;
     }

@@ -57,8 +57,10 @@ class FarmBokehPass extends BokehPass {
 
 export class FarmPostProcessing {
   constructor(renderer, scene, camera, { depthOfField = true } = {}) {
+    this.renderer = renderer;
     this.camera = camera;
     this.depthOfField = depthOfField;
+    this.nightFactor = 0;
     this.focusTarget = new THREE.Vector3();
     this.godRaySource = new THREE.Vector3();
     this.godRayScreenPosition = new THREE.Vector3();
@@ -73,7 +75,7 @@ export class FarmPostProcessing {
       aperture: 0.00012,
       maxblur: 0.003,
     });
-    this.bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.24, 0.35, 1.1);
+    this.bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.4, 0.5, 0.85);
     this.godRaysPass = new ShaderPass(PortalGodRaysShader);
     this.outputPass = new OutputPass();
     this.composer.addPass(this.renderPass);
@@ -92,6 +94,16 @@ export class FarmPostProcessing {
   setDepthOfFieldEnabled(enabled) {
     this.depthOfField = enabled;
     this.bokehPass.enabled = enabled;
+  }
+
+  updateLighting(preset, delta) {
+    const nightTarget = preset === 'night' ? 1 : (preset === 'sunset' || preset === 'dawn' ? 0.35 : 0);
+    const exposureTarget = preset === 'night' ? 0.3 : (nightTarget > 0 ? 0.7 : 1);
+    this.nightFactor = THREE.MathUtils.damp(this.nightFactor, nightTarget, 1.5, delta);
+    this.renderer.toneMappingExposure = THREE.MathUtils.damp(
+      this.renderer.toneMappingExposure ?? 1, exposureTarget, 1.5, delta
+    );
+    this.bloomPass.strength = 0.4 * (1 + this.nightFactor);
   }
 
   setPortalGodRays(position, intensity = 0) {

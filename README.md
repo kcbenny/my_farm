@@ -21,7 +21,7 @@ A web-ready, lightweight, and low-poly 3D game scene and character asset bundle 
   - Cozy Pond with water lily pads, blossoms, and wooden fishing dock
   - Raised Garden Beds with harvestable **Carrots**, **Pumpkins**, **Cabbages**, and **Sunflowers**
   - Wildflowers (yellow, red, purple) and red-capped mushrooms
-- **PBR & Ambient Lighting**: Hemisphere and ambient fill lighting + directional sunlight with a 2048px PCF soft shadow map.
+- **PBR & Ambient Lighting**: ACES/sRGB output, subtle ambient fill, day/night hemisphere lighting, a separate blue moonlight, and a 2048px PCF soft shadow map that follows the player on a texel-aligned camera to reduce shadow shimmer.
 
 ### Visual Effects
 
@@ -30,8 +30,9 @@ A web-ready, lightweight, and low-poly 3D game scene and character asset bundle 
 - Managed reflection/refraction targets are **256px** for small water surfaces and **512px** for Mystic Lake. At most one pair updates per game frame, each surface is capped at **20 captures/sec**, and hidden, back-facing or more-than-65-unit-distant surfaces do not capture. Distant uncaptured water uses an intentional teal LOD.
 - Water captures exclude other managed water surfaces to prevent recursive rendering. Bokeh's depth pass does not initiate captures, and every water owner exposes `dispose()` to release its targets and textures.
 
-- The 3D scene uses `EffectComposer`: `RenderPass` -> `BokehPass` -> `UnrealBloomPass` -> `OutputPass`. The final pass applies ACES tone mapping and sRGB output once; HTML HUD elements remain sharp.
-- Bloom uses strength **0.24**, radius **0.35**, and a linear HDR threshold of **1.1**. Fire cores, lantern glass, and sparks have HDR colors so these light sources bloom without brightening ordinary terrain and props.
+- The 3D scene uses `EffectComposer`: `RenderPass` -> `BokehPass` -> `UnrealBloomPass` -> portal god rays -> `OutputPass`. The final pass applies ACES tone mapping and sRGB output once; HTML HUD elements remain sharp.
+- Bloom uses strength **0.4** by day and transitions to **0.8** at night, with radius **0.5** and a linear HDR threshold of **0.85**. Fire cores, lantern glass, and sparks have HDR colors so these light sources bloom without brightening ordinary terrain and props.
+- Sunrise, daytime, sunset, and night presets smoothly transition their sky/fog colors and light intensities. Exposure moves from **1.0** by day to **0.3** at night; only the main directional light casts shadows, with bias configured to reduce acne and surface striping.
 - Third-person depth of field follows the player's view-space depth, with aperture **0.00012** and maximum blur **0.003**. It pauses in FPS or while aiming and defaults off on coarse-pointer/touch devices.
 - Open **Menu -> Model Viewer -> Visual Effects** to independently toggle Bloom and depth of field. Settings last for the current game session.
 - Campfire sparks use one reusable `Points`/`BufferGeometry`/`PointsMaterial` batch with 32 particles per fire and a procedural soft sprite. Position and color buffers update in place; no per-frame mesh allocation is needed. Decorative particles use camera layer 1 and are excluded from the bokeh depth pass.
