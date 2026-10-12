@@ -10,6 +10,7 @@ import { GrassField } from './GrassField.js';
 import { updateWaterSurfaces } from './StylizedWater.js';
 import { WorldPhysics, normalizeAsset } from '../gameplay/WorldPhysics.js';
 import { CampfireParticles } from './CampfireParticles.js';
+import { AtmosphereSystem } from '../rendering/AtmosphereSystem.js';
 
 export class FarmEnvironment {
   constructor(scene) {
@@ -23,6 +24,7 @@ export class FarmEnvironment {
 
     this.materials = this.createMaterials();
     this.buildWorld();
+    this.atmosphere = new AtmosphereSystem(this.scene);
     this.setupLighting();
   }
 
@@ -1144,6 +1146,11 @@ export class FarmEnvironment {
       fog: target.fog === null ? null : new THREE.Color(target.fog),
       fogDensity: target.fogDensity,
     };
+
+    // 同步更新大气系统预设
+    if (this.atmosphere && preset !== 'studio') {
+      this.atmosphere.setPreset(preset);
+    }
   }
 
   updateLighting(delta) {
@@ -1310,6 +1317,11 @@ export class FarmEnvironment {
     // Update pond animations (fish, lily pads, reeds, pollen)
     if (this.pond && this.pond.userData.update) {
       this.pond.userData.update(delta);
+    }
+
+    // Update atmosphere system (sky, clouds, sun, moon, stars, fog)
+    if (this.atmosphere && camera) {
+      this.atmosphere.update(delta, camera);
     }
   }
 }
