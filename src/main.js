@@ -637,7 +637,7 @@ class FarmGame {
     }
 
     // Update Farm Ambient Animations
-    this.farm.update(delta, this.controller.position);
+    this.farm.update(delta, this.controller.position, this.camera);
     this.postProcessing.updateLighting(this.farm.lightingPreset, delta);
     this.secretFishingSpot.update(delta);
     const completedPortalTravel = this.mapManager.update(delta, this.controller.position);

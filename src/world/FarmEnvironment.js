@@ -7,6 +7,7 @@ import { CozySceneModels } from './CozySceneModels.js';
 import { ModularTileSystem } from './ModularTileSystem.js';
 import { TreeModelBuilder } from './TreeModelBuilder.js';
 import { GrassField } from './GrassField.js';
+import { updateWaterSurfaces } from './StylizedWater.js';
 import { WorldPhysics, normalizeAsset } from '../gameplay/WorldPhysics.js';
 import { CampfireParticles } from './CampfireParticles.js';
 
@@ -114,8 +115,8 @@ export class FarmEnvironment {
     this.placeStructure(windmill, new THREE.Vector3(22, 0, -16), 'farm', 7);
 
     // 5. Cozy Pond
-    const pond = PondModel.createPond();
-    this.placeStructure(pond, new THREE.Vector3(-18, 0, 10), 'obstacle', null);
+    this.pond = PondModel.createPond();
+    this.placeStructure(this.pond, new THREE.Vector3(-18, 0, 10), 'obstacle', null);
 
     // 6. Realistic 3D Cute Shop Stall
     const shopStall = ShopStallModel.createShopStall();
@@ -1185,7 +1186,7 @@ export class FarmEnvironment {
     this.moonLight.position.copy(target).add(this.moonLightOffset);
   }
 
-  update(delta, playerPosition = null) {
+  update(delta, playerPosition = null, camera = null) {
     this.updateLighting(delta);
     this.updateShadowFollow(playerPosition);
     if (this.pollenMotes) {
@@ -1300,5 +1301,15 @@ export class FarmEnvironment {
     }
 
     this.campfireParticles.update(delta);
+
+    // Update water surfaces (reflection, refraction, wave animation)
+    if (camera) {
+      updateWaterSurfaces(this.scene, camera, delta);
+    }
+
+    // Update pond animations (fish, lily pads, reeds, pollen)
+    if (this.pond && this.pond.userData.update) {
+      this.pond.userData.update(delta);
+    }
   }
 }
