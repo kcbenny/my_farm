@@ -133,6 +133,7 @@ export class PondModel {
     bottom.rotation.x = -Math.PI / 2;
     bottom.position.y = -0.9;
     bottom.receiveShadow = true;
+    bottom.userData.physics = false;
     pondGroup.add(bottom);
 
     // Underwater rocks on the bottom
@@ -150,6 +151,7 @@ export class PondModel {
       );
       rock.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
       rock.receiveShadow = true;
+      rock.userData.physics = false;
       pondGroup.add(rock);
       underwaterRocks.push(rock);
     }
@@ -164,6 +166,7 @@ export class PondModel {
     });
     waterSurface.position.y = 0.28;
     waterSurface.name = 'Pond_Water_Surface';
+    waterSurface.userData = { ...waterSurface.userData, physics: false };
     pondGroup.add(waterSurface);
     pondGroup.userData.waterSurface = waterSurface;
 
@@ -174,6 +177,7 @@ export class PondModel {
     bank.rotation.x = -Math.PI / 2;
     bank.position.y = 0.05;
     bank.receiveShadow = true;
+    bank.userData.physics = false;
     pondGroup.add(bank);
 
     // === Lily Pads (enhanced) ===
@@ -248,6 +252,7 @@ export class PondModel {
         driftAmount: 0.08 + Math.random() * 0.05,
         baseAngle: angle,
         baseRadius: radius,
+        physics: false,
       };
 
       // Flower on some pads
@@ -296,6 +301,7 @@ export class PondModel {
         swayPhase: Math.random() * Math.PI * 2,
         swaySpeed: 0.6 + Math.random() * 0.4,
         swayAmount: 0.03 + Math.random() * 0.02,
+        physics: false,
       };
 
       pondGroup.add(reedGroup);
@@ -334,6 +340,7 @@ export class PondModel {
         radiusVariation: 0.2 + Math.random() * 0.3,
         radiusPhase: Math.random() * Math.PI * 2,
         radiusSpeed: 0.1 + Math.random() * 0.1,
+        physics: false,
       };
 
       pondGroup.add(fish);
@@ -345,6 +352,7 @@ export class PondModel {
     // === Little wooden fishing dock ===
     const dock = new THREE.Group();
     dock.position.set(0, 0.35, 4.6);
+    dock.userData.physics = false;
 
     const plankGeom = new THREE.BoxGeometry(2.6, 0.12, 0.55);
     for (let p = 0; p < 4; p++) {
@@ -432,6 +440,7 @@ export class PondModel {
       stone.rotation.set(Math.random(), Math.random(), Math.random());
       stone.castShadow = true;
       stone.receiveShadow = true;
+      stone.userData.physics = false;
       pondGroup.add(stone);
     }
 
@@ -440,6 +449,7 @@ export class PondModel {
     const streamGroup = new THREE.Group();
     streamGroup.position.set(-3.5, 0.15, -3.5);
     streamGroup.rotation.y = Math.PI / 4;
+    streamGroup.userData.physics = false;
 
     // Stream bed
     const streamBed = new THREE.Mesh(
@@ -508,6 +518,7 @@ export class PondModel {
         driftSpeed: 0.05 + Math.random() * 0.1,
         bobPhase: Math.random() * Math.PI * 2,
         bobSpeed: 1 + Math.random() * 0.5,
+        physics: false,
       };
       pondGroup.add(pollen);
       pollenParticles.push(pollen);
