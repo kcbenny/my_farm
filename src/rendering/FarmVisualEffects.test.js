@@ -128,7 +128,7 @@ test('exposure and bloom transition to a brighter night treatment', () => {
   const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
   const effects = new FarmPostProcessing(renderer, new THREE.Scene(), camera);
   effects.updateLighting('night', 10);
-  assert.ok(Math.abs(renderer.toneMappingExposure - 0.3) < 0.001);
+  assert.ok(Math.abs(renderer.toneMappingExposure - 0.55) < 0.001);
   assert.ok(Math.abs(effects.bloomPass.strength - 0.8) < 0.001);
   effects.updateLighting('day', 10);
   assert.ok(Math.abs(renderer.toneMappingExposure - 1) < 0.001);
@@ -200,8 +200,9 @@ test('night lighting adds moon fill and shadow camera follows the player without
   farm.setupLighting();
   farm.setLightingPreset('night');
   farm.updateLighting(10);
-  assert.ok(Math.abs(farm.moonLight.intensity - 0.4) < 0.00001);
-  assert.ok(Math.abs(farm.hemiLight.intensity - 0.3) < 0.00001);
+  assert.ok(Math.abs(farm.moonLight.intensity - 0.65) < 0.00001);
+  assert.ok(Math.abs(farm.hemiLight.intensity - 0.45) < 0.00001);
+  assert.ok(Math.abs(farm.ambientLight.intensity - 0.15) < 0.00001);
   assert.ok(Math.abs(farm.scene.fog.density - 0.008) < 0.00001);
 
   const position = new THREE.Vector3(13.127, 2, -9.891);

@@ -98,7 +98,7 @@ export class FarmPostProcessing {
 
   updateLighting(preset, delta) {
     const nightTarget = preset === 'night' ? 1 : (preset === 'sunset' || preset === 'dawn' ? 0.35 : 0);
-    const exposureTarget = preset === 'night' ? 0.3 : (nightTarget > 0 ? 0.7 : 1);
+    const exposureTarget = preset === 'night' ? 0.55 : (nightTarget > 0 ? 0.7 : 1);
     this.nightFactor = THREE.MathUtils.damp(this.nightFactor, nightTarget, 1.5, delta);
     this.renderer.toneMappingExposure = THREE.MathUtils.damp(
       this.renderer.toneMappingExposure ?? 1, exposureTarget, 1.5, delta

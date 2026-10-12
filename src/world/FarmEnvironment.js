@@ -1076,9 +1076,9 @@ export class FarmEnvironment {
         moonIntensity: 0, background: 0xf77f00, fog: 0xf77f00, fogDensity: 0.015,
       },
       night: {
-        ambient: 0.1, hemi: 0.3, sky: 0x1a237e, ground: 0x3d5c3d,
+        ambient: 0.15, hemi: 0.45, sky: 0x1a237e, ground: 0x3d5c3d,
         sun: 0x4a6fa5, sunIntensity: 0.05, sunOffset: [-20, 35, -20],
-        moonIntensity: 0.4, background: 0x131b3e, fog: 0x131b3e, fogDensity: 0.008,
+        moonIntensity: 0.65, background: 0x131b3e, fog: 0x131b3e, fogDensity: 0.008,
       },
       studio: {
         ambient: 0.1, hemi: 0.55, sky: 0xffffff, ground: 0xcccccc,
