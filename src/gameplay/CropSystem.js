@@ -400,6 +400,123 @@ export class CropSystem {
     }
   }
 
+  /**
+   * Enhanced wind sway animation for crops
+   * Multi-frequency, layered sway with per-plant variation
+   */
+  updateCropWindSway(crop, delta) {
+    if (!crop.mesh) return;
+
+    // Initialize wind phase if not set
+    if (crop.windPhase === undefined) {
+      crop.windPhase = crop.position.x * 0.8 + crop.position.z * 1.2 + Math.random() * Math.PI * 2;
+      crop.windPhase2 = crop.position.x * 0.5 - crop.position.z * 0.7 + Math.random() * Math.PI * 2;
+    }
+
+    const time = Date.now() * 0.001;
+    const phase = crop.windPhase;
+    const phase2 = crop.windPhase2;
+
+    // Amplitude based on growth stage
+    let baseAmplitude;
+    switch (crop.stage) {
+      case 'sprout':
+        baseAmplitude = 0.03;
+        break;
+      case 'early':
+        baseAmplitude = 0.06;
+        break;
+      case 'mature':
+      case 'ripe':
+        baseAmplitude = 0.10;
+        break;
+      default:
+        baseAmplitude = 0.05;
+    }
+
+    // Different amplitudes for different crop types
+    let typeMultiplier = 1.0;
+    switch (crop.type) {
+      case 'wheat':
+        typeMultiplier = 1.4; // wheat sways a lot
+        break;
+      case 'corn':
+        typeMultiplier = 0.9; // corn is stiffer
+        break;
+      case 'tomato':
+      case 'tomatoes':
+        typeMultiplier = 0.7; // bushy tomato plants sway less
+        break;
+      case 'carrot':
+      case 'carrots':
+        typeMultiplier = 1.1;
+        break;
+      case 'cabbage':
+        typeMultiplier = 0.5; // cabbage is heavy, less sway
+        break;
+      case 'sunflower':
+        typeMultiplier = 1.3; // tall sunflowers sway more
+        break;
+      case 'strawberry':
+        typeMultiplier = 0.6;
+        break;
+      case 'peashooter':
+        typeMultiplier = 1.2;
+        break;
+    }
+
+    const amplitude = baseAmplitude * typeMultiplier;
+
+    // Multi-frequency wind: primary sway + secondary ripple + micro tremor
+    const primarySway = Math.sin(time * 1.2 + phase) * amplitude;
+    const secondarySway = Math.sin(time * 2.0 + phase2) * amplitude * 0.35;
+    const microTremor = Math.sin(time * 3.5 + phase * 1.5) * amplitude * 0.15;
+
+    const totalSwayZ = primarySway + secondarySway + microTremor;
+    const totalSwayX = Math.cos(time * 0.9 + phase2) * amplitude * 0.6
+                     + Math.sin(time * 1.8 + phase) * amplitude * 0.25;
+
+    // Apply to root mesh (whole plant sway)
+    crop.mesh.rotation.z = totalSwayZ;
+    crop.mesh.rotation.x = totalSwayX;
+
+    // Per-child sway: higher elements sway more (simulates flexible stems)
+    // Only do this for mature/early stages for performance
+    if (crop.stage === 'mature' || crop.stage === 'ripe' || crop.stage === 'early') {
+      this._swayChildren(crop.mesh, time, phase, phase2, amplitude);
+    }
+  }
+
+  /**
+   * Recursively sway child meshes based on their height (taller = more sway)
+   */
+  _swayChildren(group, time, phase, phase2, baseAmp) {
+    group.children.forEach((child, index) => {
+      if (child.userData.baseRotation === undefined) {
+        child.userData.baseRotation = child.rotation.clone();
+        child.userData.swayPhase = phase + index * 0.7;
+        child.userData.swayPhase2 = phase2 + index * 0.5;
+      }
+
+      // Calculate height factor (higher position = more sway)
+      const heightFactor = Math.min(1.5, Math.max(0.3, child.position.y * 1.2 + 0.5));
+      const childAmp = baseAmp * 0.4 * heightFactor;
+
+      const swayZ = Math.sin(time * 1.5 + child.userData.swayPhase) * childAmp
+                  + Math.sin(time * 2.8 + child.userData.swayPhase2) * childAmp * 0.3;
+      const swayX = Math.cos(time * 1.2 + child.userData.swayPhase2) * childAmp * 0.7
+                  + Math.sin(time * 2.2 + child.userData.swayPhase) * childAmp * 0.2;
+
+      child.rotation.z = child.userData.baseRotation.z + swayZ;
+      child.rotation.x = child.userData.baseRotation.x + swayX;
+
+      // Recurse into sub-groups
+      if (child.children && child.children.length > 0 && child.type === 'Group') {
+        this._swayChildren(child, time, child.userData.swayPhase, child.userData.swayPhase2, baseAmp * 0.7);
+      }
+    });
+  }
+
   update(delta) {
     this.updateHarvestAnimations(delta);
     // 1. Grow planted crops through 4 distinct stages
@@ -439,9 +556,11 @@ export class CropSystem {
         }
         crop.mesh.scale.set(crop.scale, crop.scale, crop.scale);
       } else if (crop.stage === 'mature' || crop.stage === 'ripe') {
-        // Subtle wind sway
-        const sway = Math.sin(Date.now() * 0.002 + crop.position.x * 2) * 0.04;
-        crop.mesh.rotation.z = sway;
+        // Enhanced wind sway with multi-frequency animation
+        this.updateCropWindSway(crop, delta);
+      } else if (crop.stage === 'early' || crop.stage === 'sprout') {
+        // Wind sway for growing crops (smaller amplitude)
+        this.updateCropWindSway(crop, delta);
       }
     }
 
