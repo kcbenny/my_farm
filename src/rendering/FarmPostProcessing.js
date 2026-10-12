@@ -3,6 +3,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
+import { SSAOPass } from 'three/addons/postprocessing/SSAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 
@@ -43,6 +44,51 @@ const PortalGodRaysShader = {
   `,
 };
 
+// Atmospheric vignette with soft falloff and subtle chromatic aberration
+const VignetteShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    strength: { value: 0.35 },
+    softness: { value: 0.6 },
+    offset: { value: new THREE.Vector2(0, 0.05) },
+    chromaticAberration: { value: 0.002 },
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float strength;
+    uniform float softness;
+    uniform vec2 offset;
+    uniform float chromaticAberration;
+    varying vec2 vUv;
+
+    void main() {
+      vec2 center = vec2(0.5) + offset;
+      vec2 dir = vUv - center;
+      float dist = length(dir);
+
+      // Vignette mask with soft quadratic falloff
+      float vignette = 1.0 - smoothstep(0.5 - softness * 0.5, 0.5 + softness * 0.3, dist * 1.15);
+      vignette = mix(1.0, vignette, strength);
+
+      // Subtle chromatic aberration toward edges
+      vec2 aberrationDir = normalize(dir + 0.0001) * chromaticAberration * dist * 2.0;
+      float r = texture2D(tDiffuse, vUv + aberrationDir).r;
+      float g = texture2D(tDiffuse, vUv).g;
+      float b = texture2D(tDiffuse, vUv - aberrationDir).b;
+
+      vec3 color = vec3(r, g, b) * vignette;
+      gl_FragColor = vec4(color, 1.0);
+    }
+  `,
+};
+
 class FarmBokehPass extends BokehPass {
   render(renderer, writeBuffer, readBuffer, deltaTime, maskActive) {
     const mask = this.camera.layers.mask;
@@ -56,38 +102,74 @@ class FarmBokehPass extends BokehPass {
 }
 
 export class FarmPostProcessing {
-  constructor(renderer, scene, camera, { depthOfField = true } = {}) {
+  constructor(renderer, scene, camera, { depthOfField = true, ssao = true, bloom = true, vignette = true } = {}) {
     this.renderer = renderer;
     this.camera = camera;
+    this.scene = scene;
     this.depthOfField = depthOfField;
+    this.ssaoEnabled = ssao;
+    this.bloomEnabled = bloom;
+    this.vignetteEnabled = vignette;
     this.nightFactor = 0;
+    this._preset = 'day';
     this.focusTarget = new THREE.Vector3();
     this.godRaySource = new THREE.Vector3();
     this.godRayScreenPosition = new THREE.Vector3();
+
     const target = new THREE.WebGLRenderTarget(1, 1, {
       type: THREE.HalfFloatType,
       samples: renderer.capabilities.isWebGL2 ? 4 : 0,
     });
     this.composer = new EffectComposer(renderer, target);
+
+    // 1. Scene render
     this.renderPass = new RenderPass(scene, camera);
+
+    // 2. SSAO — screen-space ambient occlusion adds depth and grounding
+    this.ssaoPass = new SSAOPass(scene, camera, 1, 1, 32);
+    this.ssaoPass.kernelRadius = 14;
+    this.ssaoPass.minDistance = 0.002;
+    this.ssaoPass.maxDistance = 0.08;
+    this.ssaoPass.output = SSAOPass.OUTPUT.Default;
+
+    // 3. Depth of field
     this.bokehPass = new FarmBokehPass(scene, camera, {
       focus: 6,
       aperture: 0.00012,
       maxblur: 0.003,
     });
-    this.bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.4, 0.5, 0.85);
+
+    // 4. Bloom — enhanced for atmospheric glow
+    this.bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.75, 0.7, 0.72);
+
+    // 5. Vignette — darkens edges for cinematic feel
+    this.vignettePass = new ShaderPass(VignetteShader);
+
+    // 6. Portal god rays
     this.godRaysPass = new ShaderPass(PortalGodRaysShader);
+
+    // 7. Final output (tone mapping + color space)
     this.outputPass = new OutputPass();
+
+    // Build pipeline
     this.composer.addPass(this.renderPass);
+    this.composer.addPass(this.ssaoPass);
     this.composer.addPass(this.bokehPass);
     this.composer.addPass(this.bloomPass);
+    this.composer.addPass(this.vignettePass);
     this.composer.addPass(this.godRaysPass);
     this.composer.addPass(this.outputPass);
+
+    // Initial enable states
+    this.ssaoPass.enabled = ssao;
     this.bokehPass.enabled = depthOfField;
+    this.bloomPass.enabled = bloom;
+    this.vignettePass.enabled = vignette;
     this.godRaysPass.enabled = false;
   }
 
   setBloomEnabled(enabled) {
+    this.bloomEnabled = enabled;
     this.bloomPass.enabled = enabled;
   }
 
@@ -96,14 +178,60 @@ export class FarmPostProcessing {
     this.bokehPass.enabled = enabled;
   }
 
+  setSSAOEnabled(enabled) {
+    this.ssaoEnabled = enabled;
+    this.ssaoPass.enabled = enabled;
+  }
+
+  setVignetteEnabled(enabled) {
+    this.vignetteEnabled = enabled;
+    this.vignettePass.enabled = enabled;
+  }
+
   updateLighting(preset, delta) {
+    this._preset = preset;
     const nightTarget = preset === 'night' ? 1 : (preset === 'sunset' || preset === 'dawn' ? 0.35 : 0);
     const exposureTarget = preset === 'night' ? 0.55 : (nightTarget > 0 ? 0.7 : 1);
+
     this.nightFactor = THREE.MathUtils.damp(this.nightFactor, nightTarget, 1.5, delta);
+
+    // Exposure
     this.renderer.toneMappingExposure = THREE.MathUtils.damp(
       this.renderer.toneMappingExposure ?? 1, exposureTarget, 1.5, delta
     );
-    this.bloomPass.strength = 0.4 * (1 + this.nightFactor);
+
+    // Bloom — stronger at night (lights glow), softer during the day
+    const bloomStrength = preset === 'night' ? 1.1
+      : preset === 'sunset' ? 0.95
+      : preset === 'dawn' ? 0.85
+      : 0.6;
+    const bloomRadius = preset === 'night' ? 0.85 : 0.65;
+    const bloomThreshold = preset === 'night' ? 0.55 : 0.72;
+
+    this.bloomPass.strength = THREE.MathUtils.damp(
+      this.bloomPass.strength, bloomStrength, 2, delta
+    );
+    this.bloomPass.radius = THREE.MathUtils.damp(
+      this.bloomPass.radius, bloomRadius, 2, delta
+    );
+    this.bloomPass.threshold = THREE.MathUtils.damp(
+      this.bloomPass.threshold, bloomThreshold, 2, delta
+    );
+
+    // SSAO — slightly stronger at night for moody corners
+    const ssaoRadius = preset === 'night' ? 18 : 14;
+    this.ssaoPass.kernelRadius = THREE.MathUtils.damp(
+      this.ssaoPass.kernelRadius, ssaoRadius, 2, delta
+    );
+
+    // Vignette — stronger at night / sunset for cinematic mood
+    const vignetteStrength = preset === 'night' ? 0.55
+      : preset === 'sunset' ? 0.45
+      : preset === 'dawn' ? 0.4
+      : 0.3;
+    this.vignettePass.uniforms.strength.value = THREE.MathUtils.damp(
+      this.vignettePass.uniforms.strength.value, vignetteStrength, 2, delta
+    );
   }
 
   setPortalGodRays(position, intensity = 0) {
@@ -117,8 +245,11 @@ export class FarmPostProcessing {
   }
 
   resize(width, height, pixelRatio) {
-    this.composer.setPixelRatio(Math.min(pixelRatio, 1.5));
+    const pr = Math.min(pixelRatio, 1.5);
+    this.composer.setPixelRatio(pr);
     this.composer.setSize(width, height);
+    // SSAO uses its own internal render targets
+    this.ssaoPass.setSize(width * pr, height * pr);
   }
 
   render(delta, controller) {
@@ -131,6 +262,7 @@ export class FarmPostProcessing {
       this.bokehPass.uniforms.focus.value, focus, 10, delta
     );
     this.bokehPass.enabled = this.depthOfField && controller.viewMode === 'tps' && !controller.isAiming;
+
     if (this.godRaysPass.enabled) {
       this.godRayScreenPosition.copy(this.godRaySource).project(this.camera);
       const visible = this.godRayScreenPosition.z >= -1 && this.godRayScreenPosition.z <= 1
@@ -145,6 +277,7 @@ export class FarmPostProcessing {
         this.godRaysPass.uniforms.aspect.value = this.camera.aspect;
       }
     }
+
     this.composer.render(delta);
   }
 

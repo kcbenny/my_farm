@@ -46,10 +46,6 @@ export class AtmosphereSystem {
     this.stars = this._createStars();
     this.scene.add(this.stars);
 
-    // 地平线雾光带
-    this.fogRim = this._createFogRim();
-    this.scene.add(this.fogRim);
-
     // 预设配置
     this.presets = this._buildPresets();
 
@@ -637,54 +633,6 @@ export class AtmosphereSystem {
     return stars;
   }
 
-  // ========== 地平线雾光带 ==========
-  _createFogRim() {
-    const geom = new THREE.RingGeometry(this.radius * 0.3, this.radius * 0.95, 64, 1);
-    geom.rotateX(-Math.PI / 2);
-
-    const mat = new THREE.ShaderMaterial({
-      transparent: true,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-      blending: THREE.NormalBlending,
-      uniforms: {
-        uFogColor: { value: new THREE.Color(0xc5e1f5) },
-        uIntensity: { value: 0.3 },
-        uHeight: { value: 5.0 },
-      },
-      vertexShader: `
-        varying vec3 vWorldPos;
-        varying float vDist;
-        void main() {
-          vec4 worldPos = modelMatrix * vec4(position, 1.0);
-          vWorldPos = worldPos.xyz;
-          vDist = length(position.xz);
-          gl_Position = projectionMatrix * viewMatrix * worldPos;
-        }
-      `,
-      fragmentShader: `
-        uniform vec3 uFogColor;
-        uniform float uIntensity;
-        uniform float uHeight;
-        varying vec3 vWorldPos;
-        varying float vDist;
-
-        void main() {
-          // 从内到外逐渐变浓
-          float fogFactor = smoothstep(0.3, 1.0, vDist);
-          float alpha = fogFactor * uIntensity;
-          gl_FragColor = vec4(uFogColor, alpha);
-        }
-      `,
-    });
-
-    const rim = new THREE.Mesh(geom, mat);
-    rim.name = 'Atmosphere_FogRim';
-    rim.position.y = 0.5;
-    rim.renderOrder = -60;
-    return rim;
-  }
-
   // ========== 预设配置 ==========
   _buildPresets() {
     return {
@@ -711,7 +659,6 @@ export class AtmosphereSystem {
           density: 0.005,
           heightFalloff: 0.02,
         },
-        fogRim: { color: new THREE.Color(0xc5e1f5), intensity: 0.25 },
         moon: { intensity: 0.0 },
         stars: { opacity: 0.0 },
       },
@@ -738,7 +685,6 @@ export class AtmosphereSystem {
           density: 0.012,
           heightFalloff: 0.03,
         },
-        fogRim: { color: new THREE.Color(0xffc48a), intensity: 0.5 },
         moon: { intensity: 0.1 },
         stars: { opacity: 0.1 },
       },
@@ -765,7 +711,6 @@ export class AtmosphereSystem {
           density: 0.015,
           heightFalloff: 0.035,
         },
-        fogRim: { color: new THREE.Color(0xffa060), intensity: 0.6 },
         moon: { intensity: 0.2 },
         stars: { opacity: 0.2 },
       },
@@ -792,7 +737,6 @@ export class AtmosphereSystem {
           density: 0.008,
           heightFalloff: 0.025,
         },
-        fogRim: { color: new THREE.Color(0x2a3575), intensity: 0.15 },
         moon: {
           intensity: 0.8,
           position: new THREE.Vector3(-30, 50, -25),
@@ -868,11 +812,6 @@ export class AtmosphereSystem {
     // 星星
     this.stars.material.uniforms.uOpacity.value = preset.stars.opacity;
 
-    // 雾光带
-    const fogRimMat = this.fogRim.material;
-    fogRimMat.uniforms.uFogColor.value.copy(preset.fogRim.color);
-    fogRimMat.uniforms.uIntensity.value = preset.fogRim.intensity;
-
     // 场景雾（保持与现有系统兼容）
     if (this.scene.fog?.isFogExp2) {
       this.scene.fog.color.copy(preset.fog.color);
@@ -920,9 +859,6 @@ export class AtmosphereSystem {
       this.cloudLayer1.position.z = camera.position.z;
       this.cloudLayer2.position.x = camera.position.x;
       this.cloudLayer2.position.z = camera.position.z;
-      this.fogRim.position.x = camera.position.x;
-      this.fogRim.position.z = camera.position.z;
-      this.fogRim.position.y = camera.position.y * 0.1;
     }
   }
 
