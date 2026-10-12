@@ -95,7 +95,83 @@ export class PlayerPhysicsSystem {
   }
 
   hasHorizontalCollision(candidatePosition) {
-    return false; // farm physics only, not used in adventure maps
+    if (!this.worldPhysics) return false;
+    const playerHeight = this.getPlayerHeight();
+    return this.worldPhysics.intersectsPlayer(candidatePosition, this.playerRadius, playerHeight);
+  }
+
+  /**
+   * Resolve horizontal collision by pushing the player out of obstacles.
+   * Uses multiple sample points along the player's height for accurate OBB testing.
+   * Returns the resolved position (also modifies candidatePosition in place).
+   */
+  resolveHorizontalCollision(candidatePosition) {
+    if (!this.worldPhysics) return candidatePosition;
+    const playerHeight = this.getPlayerHeight();
+    const radius = this.playerRadius;
+    const bottom = candidatePosition.y + radius * 0.3;
+    const top = candidatePosition.y + Math.max(radius, playerHeight - radius);
+    const samples = Math.max(2, Math.ceil((top - bottom) / radius));
+    const maxIterations = 4;
+
+    for (let iter = 0; iter < maxIterations; iter++) {
+      let collided = false;
+      let pushX = 0;
+      let pushZ = 0;
+
+      for (const entry of this.worldPhysics.obstacles) {
+        // Quick AABB reject
+        if (candidatePosition.x + radius < entry.box.min.x || candidatePosition.x - radius > entry.box.max.x ||
+            candidatePosition.z + radius < entry.box.min.z || candidatePosition.z - radius > entry.box.max.z ||
+            candidatePosition.y + playerHeight < entry.box.min.y || candidatePosition.y > entry.box.max.y) continue;
+
+        // Test at multiple heights
+        for (let sample = 0; sample <= samples; sample++) {
+          const sampleY = THREE.MathUtils.lerp(bottom, top, sample / samples);
+          const testPos = new THREE.Vector3(candidatePosition.x, sampleY, candidatePosition.z);
+          const sphere = new THREE.Sphere(testPos, radius);
+
+          if (entry.obb.intersectsSphere(sphere)) {
+            // Find closest point on OBB surface to sphere center
+            const closest = new THREE.Vector3();
+            entry.obb.clampPoint(testPos, closest);
+            const dir = new THREE.Vector3().subVectors(testPos, closest);
+            const distSq = dir.lengthSq();
+
+            if (distSq > 0.0001) {
+              const dist = Math.sqrt(distSq);
+              const overlap = radius - dist;
+              if (overlap > 0) {
+                pushX += (dir.x / dist) * overlap;
+                pushZ += (dir.z / dist) * overlap;
+                collided = true;
+              }
+            } else {
+              // Sphere center is inside OBB — push out along the smallest axis
+              const toCenter = new THREE.Vector3().subVectors(testPos, entry.obb.center);
+              const half = entry.obb.halfSize;
+              const overlapX = half.x - Math.abs(toCenter.x);
+              const overlapZ = half.z - Math.abs(toCenter.z);
+              if (overlapX < overlapZ && overlapX > 0) {
+                pushX += Math.sign(toCenter.x || 1) * (overlapX + radius * 0.1);
+              } else if (overlapZ > 0) {
+                pushZ += Math.sign(toCenter.z || 1) * (overlapZ + radius * 0.1);
+              }
+              collided = true;
+            }
+            break; // Only resolve once per obstacle (use the lowest sample hit)
+          }
+        }
+      }
+
+      if (!collided) break;
+
+      // Apply push (only XZ — keep Y as-is, ground clamping handles vertical)
+      candidatePosition.x += pushX;
+      candidatePosition.z += pushZ;
+    }
+
+    return candidatePosition;
   }
 
   /** Check adventure map obstacle collision (cylinder-based).
@@ -124,7 +200,7 @@ export class PlayerPhysicsSystem {
 
   movePlayer(displacement) {
     const controller = this.controller;
-    const steps = Math.max(1, Math.ceil(displacement.length() / (this.playerRadius * 0.5)));
+    const steps = Math.max(1, Math.ceil(displacement.length() / (this.playerRadius * 0.3)));
     const step = displacement.clone().divideScalar(steps);
     const inAdventure = Math.abs(controller.position.x) > 55 || Math.abs(controller.position.z) > 55;
     const pivotOffset = controller.cat.mesh.userData.playerPivotOffset || 0;
@@ -137,7 +213,12 @@ export class PlayerPhysicsSystem {
       const nextGround = adventureGround !== null ? adventureGround : this.getGroundHeightAt(candidate.x, candidate.z);
       if (controller.isGrounded && nextGround - currentGround > this.maxTerrainStep) break;
       candidate.y = nextGround + pivotOffset + Math.max(0, controller.jumpOffset || 0);
-      if (inAdventure ? this.checkAdventureCollision(candidate) : this.hasHorizontalCollision(candidate)) break;
+      if (inAdventure) {
+        if (this.checkAdventureCollision(candidate)) break;
+      } else {
+        // Farm map: resolve collision by pushing player out (allows sliding along walls)
+        this.resolveHorizontalCollision(candidate);
+      }
       controller.position.copy(candidate);
       if (!inAdventure) this.resolveCollision?.({ position: controller.position, previousPosition }, this.playerRadius);
     }
