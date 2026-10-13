@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="./src/styles/shop.css" />
   <link rel="stylesheet" href="./src/styles/character-select.css" />
   <link rel="stylesheet" href="./src/ui/MissionPanel.css" />
+  <link rel="stylesheet" href="./src/styles/quest-achievement.css" />
 </head>
 <body>
   <!-- 3D Canvas -->
@@ -170,6 +171,13 @@
       </button>
       <button id="btn-open-shop" class="pill-btn shop-btn" title="Open Cute Shop [Shop Seeds, Toys & Materials]">
         <span>🛒 Cute Shop</span>
+      </button>
+      <button id="btn-daily-quest" class="pill-btn daily-quest-btn" title="Daily Quests">
+        <span>📋 Daily</span>
+        <span id="daily-quest-badge" class="notification-badge hidden">!</span>
+      </button>
+      <button id="btn-achievements" class="pill-btn achievements-btn" title="Achievements & Codex">
+        <span>🏆 Achievements</span>
       </button>
       <button id="btn-toggle-menu" class="pill-btn menu-toggle-btn" title="Toggle Menu Options">
         <span>☰ Menu</span>
@@ -788,5 +796,70 @@
   </footer>
 
   <script type="module" src="./src/main.js"></script>
+
+  <!-- Daily Quest Modal -->
+  <div id="daily-quest-modal" class="quest-modal-overlay hidden">
+    <div class="quest-modal-card">
+      <div class="quest-header">
+        <div class="quest-title">
+          <span class="quest-icon">📋</span>
+          <h2>Daily Quests</h2>
+        </div>
+        <div class="quest-level-info">
+          <span class="quest-level-badge">
+            <span class="quest-level-label">Lv.</span>
+            <span id="quest-player-level">1</span>
+          </span>
+          <div class="quest-exp-bar">
+            <div id="quest-exp-fill" class="quest-exp-fill"></div>
+            <span id="quest-exp-text" class="quest-exp-text">0 / 100</span>
+          </div>
+        </div>
+        <button id="btn-close-daily-quest" class="icon-btn close-btn">✕</button>
+      </div>
+      <div class="quest-reset-info">
+        <span class="quest-reset-icon">⏰</span>
+        <span>Resets at midnight</span>
+        <span class="quest-progress-summary">
+          <span id="quest-completed-count">0</span> / <span id="quest-total-count">4</span> completed
+        </span>
+      </div>
+      <div id="daily-quest-list" class="quest-list"></div>
+      <div class="quest-footer">
+        <button id="btn-claim-all-quests" class="action-btn primary">Claim All Rewards</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Achievements Modal -->
+  <div id="achievements-modal" class="achievement-modal-overlay hidden">
+    <div class="achievement-modal-card">
+      <div class="achievement-header">
+        <div class="achievement-title">
+          <span class="achievement-icon">🏆</span>
+          <h2>Achievements & Codex</h2>
+        </div>
+        <div class="achievement-progress-info">
+          <span id="achievement-progress-text">0 / 0</span>
+          <span class="achievement-percent" id="achievement-progress-percent">0%</span>
+        </div>
+        <button id="btn-close-achievements" class="icon-btn close-btn">✕</button>
+      </div>
+      <div class="achievement-overview-bar">
+        <div id="achievement-overview-fill" class="achievement-overview-fill"></div>
+      </div>
+      <div class="achievement-tabs" id="achievement-tabs"></div>
+      <div id="achievement-list" class="achievement-list"></div>
+    </div>
+  </div>
+
+  <!-- Achievement Unlock Toast -->
+  <div id="achievement-toast" class="achievement-toast hidden">
+    <span class="achievement-toast-icon">🏆</span>
+    <div class="achievement-toast-content">
+      <div class="achievement-toast-title">Achievement Unlocked!</div>
+      <div class="achievement-toast-name" id="achievement-toast-name"></div>
+    </div>
+  </div>
 </body>
 </html>

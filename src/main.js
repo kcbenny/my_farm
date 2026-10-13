@@ -18,8 +18,9 @@ import { LivestockSystem } from './world/LivestockSystem.js';
 import { GLTFExportManager } from './gameplay/GLTFExportManager.js';
 import { normalizeAsset } from './gameplay/WorldPhysics.js';
 import { SecretFishingSpot } from './world/SecretFishingSpot.js';
-import { MapManager } from './world/MapManager.js';
+import { QuestAchievementUI } from './ui/QuestAchievementUI.js';
 import { MissionPanel } from './ui/MissionPanel.js';
+import { MapManager } from './world/MapManager.js';
 import { FarmPostProcessing } from './rendering/FarmPostProcessing.js';
 import { CatLifeParticles } from './character/CatLifeParticles.js';
 import { updateWaterSurfaces } from './world/StylizedWater.js';
@@ -87,11 +88,16 @@ class FarmGame {
     this.ui = new UIManager(this);
     this.ui.setLoadingProgress(15);
 
+    // Daily Quest & Achievement System
+    this.questUI = new QuestAchievementUI(this);
+    this.ui.setLoadingProgress(18);
+
     // Mission Panel — adventure map quest display
     this.missionPanel = new MissionPanel();
     this.missionPanel.onAllComplete = (mapName) => {
       this.sound.playQuestComplete();
       this.coins += 25;
+      if (this.questUI) this.questUI.onMapCompleted();
       this.ui.updateStats(this.coins, this.cropsHarvested, this.pestsDefeated, this.shop ? this.shop.diamonds : 0);
       this.ui.showToast(`🏆 ${mapName} 全部任務完成！+25🪙`);
     };
@@ -468,6 +474,8 @@ class FarmGame {
           if (gainedDiamonds) this.shop.diamonds += gainedDiamonds;
 
           this.sound.playHarvest();
+          if (this.questUI) this.questUI.onCropHarvested();
+          if (this.questUI) this.questUI.onCoinsChanged(this.coins);
           this.ui.updateStats(this.coins, this.cropsHarvested, this.pestsDefeated, this.shop.diamonds);
 
           const bonusLabel = (this.currentCharacterId === 'snowball') ? ' (✨ Lucky Whiskers!)' : '';
@@ -495,6 +503,7 @@ class FarmGame {
           if (!this.cropSystem.plantSeed(nearestEmptyPlot, activeSeed)) return;
           this.shop.seeds[activeSeed]--;
           this.sound.playPop();
+          if (this.questUI) this.questUI.onSeedPlanted(activeSeed);
           this.ui.updateSeedHotbar();
           this.ui.showToast(`🌱 Planted 1x ${activeSeed.toUpperCase()} seed!`);
         });
@@ -744,6 +753,8 @@ class FarmGame {
         if (d.fishCaught) {
           this.fishCaught = (this.fishCaught || 0) + 1;
           this.coins += 10;
+          if (this.questUI) this.questUI.onFishCaught();
+          if (this.questUI) this.questUI.onCoinsChanged(this.coins);
           this.ui.showToast(`🐟 Fish caught! +10🪙 (${this.fishCaught || 0} total)`);
         }
       }
@@ -774,6 +785,8 @@ class FarmGame {
         this.sound.playSplat();
         this.pestsDefeated++;
         this.coins += hit.points;
+        if (this.questUI) this.questUI.onPestDefeated();
+        if (this.questUI) this.questUI.onCoinsChanged(this.coins);
         this.ui.updateStats(this.coins, this.cropsHarvested, this.pestsDefeated, this.shop.diamonds);
         this.ui.showToast(`🎯 +${hit.points}🪙 Scared away ${hit.type}!`);
 
