@@ -38,8 +38,26 @@ export class AdventureBase {
     this.total = 0;
     this.onCollectCallback = null; // called when a gem is picked up
 
+    // ── Combo system (冷门玩法：连续收集倍率加成) ──
+    this.combo = 0;
+    this.comboTimer = 0;
+    this.comboWindow = 2.5; // 2.5秒内继续收集保持连击
+    this.maxComboMultiplier = 5;
+    this.bestCombo = 0;
+    this.comboScore = 0; // 连击累计的额外"分数"
+
+    // ── Hidden achievements (彩蛋成就) ──
+    this.achievements = new Map(); // id -> {id, name, desc, unlocked, secret}
+    this._initDefaultAchievements();
+
+    // ── Risk rooms (高风险高回报房间) ──
+    this.riskRooms = []; // {id, position, radius, entered, rewardClaimed, penalty}
+
     // ── Particle burst pool ──
     this.bursts = [];
+
+    // ── Floating text pool (连击/成就提示) ──
+    this.floatingTexts = [];
 
     // ── Root group ──
     const o = cfg.mapOffset.clone();
@@ -138,11 +156,155 @@ export class AdventureBase {
     gem.userData.collected = true;
     gem.visible = false;
     this.collected++;
+
+    // Combo system
+    this.combo++;
+    this.comboTimer = this.comboWindow;
+    if (this.combo > this.bestCombo) this.bestCombo = this.combo;
+    const multiplier = Math.min(this.combo, this.maxComboMultiplier);
+    this.comboScore += multiplier;
+
+    // Floating combo text
+    if (this.combo >= 2) {
+      this.spawnFloatingText(
+        gem.position.clone(),
+        `${this.combo}x COMBO!`,
+        this._comboColor(this.combo),
+        0.9
+      );
+    }
+
+    // Check combo achievements
+    if (this.combo >= 5) this.unlockAchievement('combo5');
+    if (this.combo >= 10) this.unlockAchievement('combo10');
+    if (this.combo >= this.total * 0.8 && this.total > 10) this.unlockAchievement('flawless');
+
     this.spawnBurst(gem.position.clone());
     if (this.onCollectCallback) {
       this.onCollectCallback(worldPosition, this.collected, this.total);
     }
     return true;
+  }
+
+  _comboColor(combo) {
+    if (combo >= 10) return 0xff3366;
+    if (combo >= 7) return 0xff6600;
+    if (combo >= 5) return 0xffcc00;
+    if (combo >= 3) return 0x66ff66;
+    return 0xffffff;
+  }
+
+  _initDefaultAchievements() {
+    this.addAchievement('combo5', '连击新手', '达成 5 连击', false);
+    this.addAchievement('combo10', '连击大师', '达成 10 连击', true);
+    this.addAchievement('flawless', '完美收集', '一次连击收集 80% 以上宝石', true);
+    this.addAchievement('speedrun', '疾风探索', '60秒内完成地图', true);
+    this.addAchievement('explorer', '角落探险家', '到达地图边缘区域', false);
+  }
+
+  addAchievement(id, name, desc, secret = false) {
+    if (!this.achievements.has(id)) {
+      this.achievements.set(id, { id, name, desc, unlocked: false, secret });
+    }
+  }
+
+  unlockAchievement(id) {
+    const ach = this.achievements.get(id);
+    if (ach && !ach.unlocked) {
+      ach.unlocked = true;
+      this.spawnFloatingText(
+        new THREE.Vector3(0, 3, 0),
+        `🏆 ${ach.name}`,
+        0xffd700,
+        2.0,
+        true
+      );
+      return true;
+    }
+    return false;
+  }
+
+  getUnlockedAchievements() {
+    return Array.from(this.achievements.values()).filter(a => a.unlocked);
+  }
+
+  getTotalAchievements() {
+    return this.achievements.size;
+  }
+
+  /* ──────────────── Floating Text ──────────────── */
+
+  spawnFloatingText(position, text, color = 0xffffff, life = 1.0, big = false) {
+    // Create a canvas texture with text
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const fontSize = big ? 48 : 28;
+    canvas.width = 256;
+    canvas.height = 64;
+    ctx.font = `bold ${fontSize}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#' + color.toString(16).padStart(6, '0');
+    ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+    ctx.lineWidth = 4;
+    ctx.strokeText(text, 128, 32);
+    ctx.fillText(text, 128, 32);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    const mat = new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+    });
+    const sprite = new THREE.Sprite(mat);
+    sprite.position.copy(position);
+    sprite.position.y += 0.5;
+    sprite.scale.set(big ? 3 : 1.5, big ? 0.75 : 0.375, 1);
+    sprite.userData = { life, age: 0, big };
+    this.group.add(sprite);
+    this.floatingTexts.push(sprite);
+  }
+
+  updateFloatingTexts(delta) {
+    for (let i = this.floatingTexts.length - 1; i >= 0; i--) {
+      const t = this.floatingTexts[i];
+      t.userData.age += delta;
+      if (t.userData.age >= t.userData.life) {
+        t.material.map.dispose();
+        t.material.dispose();
+        t.removeFromParent();
+        this.floatingTexts.splice(i, 1);
+        continue;
+      }
+      const p = t.userData.age / t.userData.life;
+      t.position.y += delta * 0.8;
+      t.material.opacity = 1 - p;
+    }
+  }
+
+  /* ──────────────── Risk Rooms ──────────────── */
+
+  addRiskRoom(id, position, radius, penalty = 'slow') {
+    const room = {
+      id, position: position.clone(), radius,
+      entered: false, rewardClaimed: false, penalty,
+    };
+    this.riskRooms.push(room);
+    return room;
+  }
+
+  checkRiskRooms(playerPos) {
+    const results = [];
+    for (const room of this.riskRooms) {
+      const dist = playerPos.distanceTo(room.position.clone().add(this.group.position));
+      if (dist < room.radius && !room.entered) {
+        room.entered = true;
+        results.push({ id: room.id, action: 'enter', penalty: room.penalty });
+      }
+    }
+    return results;
   }
 
   getProgress() {
@@ -227,6 +389,14 @@ export class AdventureBase {
   update(delta) {
     this.time += delta;
 
+    // Combo timer decay
+    if (this.combo > 0) {
+      this.comboTimer -= delta;
+      if (this.comboTimer <= 0) {
+        this.combo = 0;
+      }
+    }
+
     for (const gem of this.collectibles) {
       if (gem.userData.collected) continue;
       gem.rotation.y += delta * 2.2;
@@ -234,6 +404,7 @@ export class AdventureBase {
     }
 
     this.updateBursts(delta);
+    this.updateFloatingTexts(delta);
 
     if (this.returnRing) {
       this.returnRing.rotation.z = this.time * 0.8;
