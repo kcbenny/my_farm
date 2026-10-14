@@ -6,16 +6,6 @@ import { SnowyMountain } from './SnowyMountain.js';
 import { MysticLake } from './MysticLake.js';
 import { StarryMeadow } from './StarryMeadow.js';
 import { HarvestMaze } from './HarvestMaze.js';
-import {
-  addMoonlitPath, updateMoonlitPath,
-  addHourglassMode, startHourglass, updateHourglass, completeHourglass,
-  addTemperatureSystem, updateTemperature,
-  addTideSystem, updateTide,
-  addAstrologySystem, applyConstellationBuff,
-  addFogOfWar, updateFogOfWar,
-  addExplorerAchievement, checkExplorerCorners,
-  addMysteryMerchant, updateMysteryMerchant,
-} from './MapFunEnhancements.js';
 
 const MapClasses = {
   enchantedForest: EnchantedForest,
@@ -92,13 +82,6 @@ export class MapManager {
     const map = this.maps[mapId];
     this.activeMapId = mapId;
     if (map.setAtmosphere) map.setAtmosphere(true);
-
-    // 注入冷门玩法增强（每个地图第一次加载时）
-    if (!map._enhanced) {
-      this._injectFunEnhancements(mapId, map);
-      map._enhanced = true;
-    }
-
     // Fire mission panel
     if (this.onEnterMap && map.getMissions) {
       const missions = map.getMissions();
@@ -107,79 +90,6 @@ export class MapManager {
       this.onEnterMap(cfg.name, missions, status, hints);
     }
     return cfg.mapArrival.clone();
-  }
-
-  /**
-   * 给每个地图注入独特的冷门玩法增强
-   * 设计原则：不是增加更多收集品，而是改变决策方式
-   */
-  _injectFunEnhancements(mapId, map) {
-    // 所有地图通用：角落探险家成就
-    const r = map.mapRadius || 30;
-    const corners = [
-      new THREE.Vector3(r * 0.85, 0, r * 0.85),
-      new THREE.Vector3(-r * 0.85, 0, r * 0.85),
-      new THREE.Vector3(r * 0.85, 0, -r * 0.85),
-      new THREE.Vector3(-r * 0.85, 0, -r * 0.85),
-    ];
-    addExplorerAchievement(map, corners);
-
-    switch (mapId) {
-      case 'enchantedForest':
-        // 月光小径：每隔一段时间出现的发光捷径，通向隐藏宝藏
-        addMoonlitPath(map);
-        // 精灵集市：用收集的粉尘交易特殊buff
-        addMysteryMerchant(map, {
-          position: new THREE.Vector3(-6, 0, 6),
-          currency: 'fairyDust',
-          items: [
-            { id: 'glow', name: '萤光护符', desc: '收集范围 +30%', price: 5 },
-            { id: 'speed', name: '疾风之靴', desc: '移动速度 +20%', price: 8 },
-            { id: 'magnet', name: '粉尘磁铁', desc: '自动吸引附近粉尘', price: 12 },
-          ],
-        });
-        break;
-
-      case 'ancientRuins':
-        // 沙漏倒计时：踩错符文启动倒计时，时间内完成有额外奖励
-        addHourglassMode(map);
-        // 神秘商人（用黄金圣甲虫交易）
-        addMysteryMerchant(map, {
-          position: new THREE.Vector3(8, 0, -6),
-          currency: 'scarabs',
-          items: [
-            { id: 'shield', name: '流沙护符', desc: '流沙减速减半', price: 6 },
-            { id: 'map', name: '遗迹地图', desc: '显示密室位置', price: 10 },
-            { id: 'time', name: '时之沙', desc: '沙漏时间 +15秒', price: 8 },
-          ],
-        });
-        break;
-
-      case 'snowyMountain':
-        // 体温系统：太冷减速，找温泉恢复
-        const hotSprings = [
-          new THREE.Vector3(-8, 0, -4),
-          new THREE.Vector3(6, 0, 8),
-          new THREE.Vector3(0, 0, -10),
-        ];
-        addTemperatureSystem(map, { hotSprings });
-        break;
-
-      case 'mysticLake':
-        // 潮汐系统：水位变化改变可达区域
-        addTideSystem(map);
-        break;
-
-      case 'starryMeadow':
-        // 星象占卜：完成星座的顺序影响获得的buff
-        addAstrologySystem(map);
-        break;
-
-      case 'harvestMaze':
-        // 迷雾记忆：只有走过的地方才可见（增强探索感）
-        addFogOfWar(map);
-        break;
-    }
   }
 
   returnToFarm() {
@@ -227,6 +137,9 @@ export class MapManager {
     // Harvest Maze specific
     if (map.tryLightLantern && map.tryLightLantern(playerPos)) { result.interacted = true; }
     if (map.tryAppleBobbing && map.tryAppleBobbing(playerPos)) { result.interacted = true; }
+    if (map.updateAppleBobbing) { result.data.bobState = map.updateAppleBobbing(0.016); }
+    if (map.tryRiddleInteraction) { result.data.riddle = map.tryRiddleInteraction(playerPos); }
+    if (map.updateFog) { map.updateFog(playerPos); }
     if (map.updateKing) { result.data.king = map.updateKing(0.016, playerPos); }
 
     // Enchanted Forest specific
@@ -234,6 +147,7 @@ export class MapManager {
     if (map.checkCanopyPlatform) { map.checkCanopyPlatform(playerPos); }
     if (map.tryCaptureFirefly && map.tryCaptureFirefly(playerPos)) { result.interacted = true; }
     if (map.checkTreehole) { result.data.treehole = map.checkTreehole(playerPos); }
+    if (map.checkFairyProximity) { map.checkFairyProximity(playerPos, 0.016); }
 
     // Snowy Mountain specific
     if (map.isOnIceSheet) { result.data.onIce = map.isOnIceSheet(playerPos); }
@@ -246,59 +160,19 @@ export class MapManager {
     if (map.checkVortexEntry && map.checkVortexEntry(playerPos)) { result.interacted = true; }
     if (map.boardBoat) { result.data.boatBoard = map.boardBoat(playerPos); }
     if (map.startFishing) { result.data.fishing = map.startFishing(); }
+    if (map.updateFishing) { result.data.fishingState = map.updateFishing(0.016); }
     if (map.checkFishCatch) { result.data.fishCaught = map.checkFishCatch(); }
 
     // Starry Meadow specific
     if (map.checkConstellation && map.checkConstellation(playerPos)) { result.interacted = true; }
-    if (map.checkHengeAltar && map.checkHengeAltar(playerPos)) { result.interacted = true; }
-    if (map.checkShootingStarWish && map.checkShootingStarWish()) { result.interacted = true; }
+    if (map.tryHengeAltar && map.tryHengeAltar(playerPos)) { result.interacted = true; }
+    if (map.checkShootingStarWish && map.checkShootingStarWish(playerPos)) { result.interacted = true; }
+    if (map.checkDanceParticipation) { map.checkDanceParticipation(playerPos); }
 
     // Mission status update every frame
     if (map.checkMissionStatus) {
       result.data.missions = map.checkMissionStatus();
     }
-
-    // ── 增强玩法系统检测 ──
-    // 角落探险家成就
-    if (map._explorerCorners) {
-      checkExplorerCorners(map, playerPos);
-    }
-
-    // 月光小径 (EnchantedForest)
-    if (map._moonlitPath) {
-      const moonlitResult = updateMoonlitPath(map, playerPos, 0);
-      if (moonlitResult) result.data.moonlitPath = moonlitResult;
-    }
-
-    // 神秘商人
-    if (map._merchant) {
-      const merchantResult = updateMysteryMerchant(map, playerPos, 0);
-      if (merchantResult) result.data.merchant = merchantResult;
-    }
-
-    // 体温系统 (SnowyMountain)
-    if (map._temperature) {
-      const tempResult = updateTemperature(map, playerPos, 0);
-      if (tempResult) result.data.temperature = tempResult;
-    }
-
-    // 迷雾记忆 (HarvestMaze)
-    if (map._fogOfWar) {
-      const fowResult = updateFogOfWar(map, playerPos);
-      if (fowResult) result.data.fogOfWar = fowResult;
-    }
-
-    // 连击 & 成就信息
-    result.data.combo = {
-      current: map.combo || 0,
-      best: map.bestCombo || 0,
-      timer: map.comboTimer || 0,
-      score: map.comboScore || 0,
-    };
-    result.data.achievements = {
-      unlocked: map.getUnlockedAchievements ? map.getUnlockedAchievements().length : 0,
-      total: map.getTotalAchievements ? map.getTotalAchievements() : 0,
-    };
 
     return result;
   }
@@ -318,15 +192,7 @@ export class MapManager {
   update(delta, playerPosition) {
     const completedPortalTravel = this.portalSystem.update(delta, playerPosition);
     if (this.activeMapId && this.maps[this.activeMapId]) {
-      const map = this.maps[this.activeMapId];
-      map.update(delta);
-
-      // 增强玩法系统每帧更新
-      if (map._moonlitPath) updateMoonlitPath(map, playerPosition, delta);
-      if (map._hourglass) updateHourglass(map, delta);
-      if (map._temperature) updateTemperature(map, playerPosition, delta);
-      if (map._tide) updateTide(map, delta);
-      if (map._merchant) updateMysteryMerchant(map, playerPosition, delta);
+      this.maps[this.activeMapId].update(delta);
     }
     return completedPortalTravel;
   }

@@ -13,9 +13,10 @@ const MAT = {
   apple: new THREE.MeshStandardMaterial({ color: 0xcc2233, roughness: 0.45 }),
   lanternOff: new THREE.MeshBasicMaterial({ color: 0x553311, transparent: true, opacity: 0.4 }),
   lanternOn: new THREE.MeshBasicMaterial({ color: 0xff9933, transparent: true, opacity: 0.85 }),
-  fogPlane: new THREE.MeshBasicMaterial({ color: 0x332211, transparent: true, opacity: 0.7, side: THREE.DoubleSide }),
+  fogPlane: new THREE.MeshBasicMaterial({ color: 0x332211, transparent: true, opacity: 0.65, side: THREE.DoubleSide }),
   leaf: new THREE.MeshBasicMaterial({ color: 0xcc7722, transparent: true, opacity: 0.7, side: THREE.DoubleSide }),
   waterBucket: new THREE.MeshStandardMaterial({ color: 0x775533, roughness: 0.8 }),
+  pumpkinGem: new THREE.MeshStandardMaterial({ color: 0xff8b2d, roughness: 0.35, emissive: 0xff4d00, emissiveIntensity: 1.5 }),
 };
 
 function createRandom(seed = 0x4d415a45) {
@@ -90,14 +91,19 @@ export class HarvestMaze extends AdventureBase {
     this.riddleAnswered = 0;
     this.currentRiddle = null;
     this.riddleTimer = 0;
+    this.riddleActive = false;
+    this.riddleAnswerBuffer = '';
     this.fogMeshes = [];
     this.leaves = [];
     this.revealRadius = 8;
-    // Fog of war tracking grid (simple)
-    this.fogGrid = new Set();
     this.gemRaycaster = new THREE.Raycaster();
     this.gemParticlePositions = null;
     this.lastHintTime = -Infinity;
+    this._bobActive = false;
+    this._bobTimer = 0;
+    this._bobTargetZone = 0;
+    this._bobPosition = 0;
+    this._bobSpeed = 0;
 
     this.build();
     this._setupMissions();
@@ -115,12 +121,12 @@ export class HarvestMaze extends AdventureBase {
   getMissions() { return this._missions; }
   getHints() {
     return [
-      '🏃 走過南瓜寶石即可自動收集',
+      '🏃 走近南瓜寶石即可自動收集',
       '🎃 走近南瓜燈籠按 [E] 點亮',
       '👑 10 盞燈全亮後南瓜王出現！引它撞牆 3 次擊敗',
-      '🍎 靠近蘋果樹旁水桶可玩 Apple Bobbing',
-      '🤔 稻草人每 30 秒出謎語，猜對獲得寶石位置提示',
-      '🌫️ 迷霧只顯示周圍 8 格，走過的地方永久點亮',
+      '🍎 靠近蘋果樹旁水桶按 [E] 玩 Apple Bobbing，指標在綠區時按 [E] 咬中',
+      '🤔 走近稻草人按 [E] 聽謎語，再次按 [E] 看選項選擇答案',
+      '🌫️ 迷霧中能見度低，走過的路會慢慢清晰',
       '🔮 找到傳送門按 [E] 即可返回農場',
     ];
   }
@@ -266,7 +272,7 @@ export class HarvestMaze extends AdventureBase {
         new THREE.MeshBasicMaterial({ color: 0x4488cc, transparent: true, opacity: 0.6 }));
       water.position.set(0, 0.42, 0.7); tree.add(water);
       tree.position.set(Math.sin(a) * r, 0, Math.cos(a) * r);
-      tree.userData = { bobTimer: 0, appleReady: true, bobPhase: Math.random() * Math.PI * 2 };
+      tree.userData = { bobCooldown: 0, appleReady: true, index: i };
       this.group.add(tree);
       this.appleTrees.push(tree);
     }
@@ -287,20 +293,21 @@ export class HarvestMaze extends AdventureBase {
       new THREE.NumberKeyframeTrack('.rotation[y]', [0, 1.2, 2.4], [-0.16, 0.16, -0.16]),
     ]);
     this.scarecrowMixer.clipAction(swayClip).play();
-    // Riddle bubble
-    this.riddleBubble = null;
 
-    // ── Fog of War planes ──
-    // Use a simple approach: large semi-transparent plane that gets cutouts
-    // For simplicity, we use distance-based reveal
-    const fogGeo = new THREE.PlaneGeometry(R * 2.5, R * 2.5);
-    this.fogOverlay = new THREE.Mesh(fogGeo, MAT.fogPlane.clone());
-    this.fogOverlay.rotation.x = -Math.PI / 2;
-    this.fogOverlay.position.y = 0.15;
-    this.fogOverlay.renderOrder = 999;
-    this.fogOverlay.material.depthTest = false;
-    this.fogOverlay.visible = false; // Hidden until activated
-    this.group.add(this.fogOverlay);
+    // Riddle data
+    this._riddles = [
+      { q: 'I have ears but cannot hear. What am I?', a: 'corn', options: ['corn', 'wheat', 'potato', 'carrot'] },
+      { q: 'I am orange and round, with a glowing grin. What am I?', a: 'pumpkin', options: ['pumpkin', 'apple', 'sun', 'lantern'] },
+      { q: 'The more you take, the more you leave behind. What am I?', a: 'footsteps', options: ['footsteps', 'time', 'money', 'seeds'] },
+      { q: 'I fall but never get hurt. What am I?', a: 'leaf', options: ['leaf', 'rain', 'snow', 'feather'] },
+      { q: 'I stand in fields all day, but never work. What am I?', a: 'scarecrow', options: ['scarecrow', 'farmer', 'tree', 'fence'] },
+    ];
+    this._currentRiddleIndex = -1;
+    this._riddleShowOptions = false;
+
+    // ── Fog of war - enabled ──
+    this.fogActive = true;
+    this._fogRevealedCells = new Set();
 
     // ── Hay bales ──
     for (let i = 0; i < 12; i++) {
@@ -315,13 +322,15 @@ export class HarvestMaze extends AdventureBase {
     // ── Falling leaves ──
     for (let i = 0; i < 30; i++) {
       const leaf = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 0.15), MAT.leaf);
-      leaf.position.set((Math.random() - 0.5) * 55, 3 + Math.random() * 6, (Math.random() - 0.5) * 55);
+      const a = Math.random() * Math.PI * 2;
+      const r = Math.random() * (R - 2);
+      leaf.position.set(Math.sin(a) * r, 3 + Math.random() * 6, Math.cos(a) * r);
       leaf.userData = { speed: 0.3 + Math.random() * 0.8, sway: Math.random() * Math.PI * 2, maxY: 7, minY: -0.2 };
       this.group.add(leaf);
       this.leaves.push(leaf);
     }
 
-    // ── Pumpkin King (hidden initially) ──
+    // ── Pumpkin King (hidden initially, spawns at edge of maze) ──
     this.kingGroup = new THREE.Group();
     const kingBody = new THREE.Mesh(new THREE.SphereGeometry(2, 16, 12), MAT.pumpkin);
     kingBody.scale.y = 0.7; this.kingGroup.add(kingBody);
@@ -330,7 +339,11 @@ export class HarvestMaze extends AdventureBase {
     this.kingGroup.add(kingFace);
     const kingStem = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.4, 1, 8), MAT.stem);
     kingStem.position.y = 1.5; this.kingGroup.add(kingStem);
-    this.kingGroup.position.set(0, 0, 0);
+    // Spawn at a maze cell near the edge (cell 10 = top edge area)
+    const kingSpawnPos = this.getMazePosition(10);
+    this.kingGroup.position.copy(kingSpawnPos);
+    this.kingGroup.position.y = 1.2;
+    this.pumpkinKingPos.copy(kingSpawnPos);
     this.kingGroup.visible = false;
     this.group.add(this.kingGroup);
 
@@ -354,18 +367,14 @@ export class HarvestMaze extends AdventureBase {
       this.group.add(spotlight, spotlight.target);
     }
 
-    // ── Pumpkin gems and their particle aura ──
+    // ── Pumpkin gems (proper pumpkin shape, not dodecahedron) ──
     const gemStart = this.collectibles.length;
-    this.spawnGems(Array.from({ length: 18 }, (_, index) => this.getMazePosition(3 + index * 6, 0.65)), 0.28);
-    for (const gem of this.collectibles.slice(gemStart)) {
-      gem.material = new THREE.MeshStandardMaterial({
-        color: 0xff8b2d,
-        emissive: 0xff4d00,
-        emissiveIntensity: 2.5,
-        roughness: 0.35,
-      });
-      gem.userData.pumpkinGem = true;
-    }
+    const gemPositions = Array.from({ length: 18 }, (_, index) =>
+      this.getMazePosition(3 + index * 6, 0.65)
+    );
+    this._spawnPumpkinGems(gemPositions);
+
+    // Gem particle aura
     const particleCount = 18 * 10;
     this.gemParticlePositions = new Float32Array(particleCount * 3);
     this.gemParticles = new THREE.Points(
@@ -400,6 +409,48 @@ export class HarvestMaze extends AdventureBase {
       this.addObstacleCollider(new THREE.Vector3(Math.sin(a) * 22, 0, Math.cos(a) * 22), 1.0);
     }
     this.addObstacleCollider(new THREE.Vector3(0, 0, 8), 0.6);
+  }
+
+  _spawnPumpkinGems(positions) {
+    this.total += positions.length;
+    positions.forEach((pos, i) => {
+      const pumpkinGem = new THREE.Group();
+      // Pumpkin body (slightly squashed sphere)
+      const body = new THREE.Mesh(GEO.sphere12, MAT.pumpkinGem.clone());
+      body.scale.set(0.22, 0.18, 0.22);
+      pumpkinGem.add(body);
+      // Pumpkin ridges (vertical indentations - simulated with darker stripes)
+      for (let r = 0; r < 5; r++) {
+        const ridge = new THREE.Mesh(
+          new THREE.BoxGeometry(0.02, 0.3, 0.02),
+          new THREE.MeshStandardMaterial({ color: 0xcc5520, roughness: 0.5 })
+        );
+        const ra = (r / 5) * Math.PI * 2;
+        ridge.position.set(Math.sin(ra) * 0.2, 0, Math.cos(ra) * 0.2);
+        ridge.rotation.y = ra;
+        pumpkinGem.add(ridge);
+      }
+      // Stem
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.04, 0.1, 6), MAT.stem);
+      stem.position.y = 0.2;
+      pumpkinGem.add(stem);
+      // Glow aura
+      const glow = new THREE.Mesh(GEO.sphere12,
+        new THREE.MeshBasicMaterial({ color: 0xff8833, transparent: true, opacity: 0.35 }));
+      glow.scale.setScalar(0.35);
+      pumpkinGem.add(glow);
+
+      pumpkinGem.position.copy(pos);
+      pumpkinGem.userData = {
+        collected: false,
+        index: this.collectibles.length + i,
+        baseY: pos.y,
+        isPumpkinGem: true,
+        bobPhase: Math.random() * Math.PI * 2,
+      };
+      this.group.add(pumpkinGem);
+      this.collectibles.push(pumpkinGem);
+    });
   }
 
   setAtmosphere(active) {
@@ -466,8 +517,7 @@ export class HarvestMaze extends AdventureBase {
   _spawnPumpkinKing() {
     this.pumpkinKingActive = true;
     this.kingGroup.visible = true;
-    this.pumpkinKingPos.set(0, 0, 0);
-    this.kingGroup.position.set(0, 1.2, 0);
+    // King starts at its spawn position (maze cell 10, near edge)
   }
 
   /* ──── Apple Bobbing ──── */
@@ -475,18 +525,80 @@ export class HarvestMaze extends AdventureBase {
     for (const tree of this.appleTrees) {
       const wp = new THREE.Vector3(); tree.getWorldPosition(wp);
       if (playerPos.distanceToSquared(wp) < 6.25 && tree.userData.appleReady) {
-        tree.userData.bobTimer = 3.0;
-        tree.userData.appleReady = false;
-        this.appleBobCount++;
-        // Visual feedback
+        if (!this._bobActive) {
+          // Start the mini-game
+          this._bobActive = true;
+          this._bobTimer = 5; // 5 seconds to get the apple
+          this._bobPosition = 0;
+          this._bobSpeed = 2 + Math.random() * 2;
+          this._bobDirection = 1;
+          // Target zone: random position between 0.3 and 0.7
+          this._bobTargetZone = 0.3 + Math.random() * 0.4;
+          this._bobCurrentTree = tree;
+          return { started: true, treeIndex: tree.userData.index };
+        }
+      }
+    }
+    return false;
+  }
+
+  // Called when player presses E during apple bobbing
+  tryBobCatch() {
+    if (!this._bobActive) return false;
+    // Check if the bobber is in the target zone
+    const zoneSize = 0.15;
+    const inZone = Math.abs(this._bobPosition - this._bobTargetZone) < zoneSize;
+    if (inZone) {
+      // Caught an apple!
+      this._bobActive = false;
+      this.appleBobCount++;
+      if (this._bobCurrentTree) {
+        this._bobCurrentTree.userData.appleReady = false;
+        this._bobCurrentTree.userData.bobCooldown = 8;
+      }
+      // Visual feedback
+      const tree = this._bobCurrentTree;
+      if (tree) {
+        const wp = new THREE.Vector3(); tree.getWorldPosition(wp);
         const eff = new THREE.Mesh(GEO.sphere12, MAT.apple);
         eff.scale.setScalar(0.25); eff.position.copy(wp).add(new THREE.Vector3(0, 1.5, 0));
         this.group.add(eff);
         setTimeout(() => { eff.visible = false; eff.removeFromParent(); }, 1500);
-        return true;
+        this.spawnBurst(wp.clone().sub(this.group.position).add(new THREE.Vector3(0, 1, 0)));
       }
+      return { caught: true };
+    } else {
+      // Missed - just continue the mini-game
+      return { missed: true };
     }
-    return false;
+  }
+
+  updateAppleBobbing(delta) {
+    if (!this._bobActive) return null;
+    this._bobTimer -= delta;
+    if (this._bobTimer <= 0) {
+      // Time's up - failed
+      this._bobActive = false;
+      if (this._bobCurrentTree) {
+        this._bobCurrentTree.userData.appleReady = false;
+        this._bobCurrentTree.userData.bobCooldown = 5;
+      }
+      return { timeout: true };
+    }
+    // Move the bobber back and forth
+    this._bobPosition += this._bobSpeed * this._bobDirection * delta;
+    if (this._bobPosition >= 1) {
+      this._bobPosition = 1;
+      this._bobDirection = -1;
+    } else if (this._bobPosition <= 0) {
+      this._bobPosition = 0;
+      this._bobDirection = 1;
+    }
+    return {
+      position: this._bobPosition,
+      targetZone: this._bobTargetZone,
+      timeLeft: this._bobTimer,
+    };
   }
 
   /* ──── Pumpkin King chase ──── */
@@ -516,7 +628,7 @@ export class HarvestMaze extends AdventureBase {
           // Drop loot
           for (let i = 0; i < 10; i++) {
             const a = (i / 10) * Math.PI * 2;
-            this.spawnGems([this.pumpkinKingPos.clone().add(new THREE.Vector3(Math.sin(a) * 2, 0.6, Math.cos(a) * 2))], 0.35);
+            this._spawnPumpkinGems([this.pumpkinKingPos.clone().add(new THREE.Vector3(Math.sin(a) * 2, 0.6, Math.cos(a) * 2))]);
           }
           this.spawnBurst(this.pumpkinKingPos.clone().add(new THREE.Vector3(0, 2, 0)));
           return { defeated: true };
@@ -537,37 +649,86 @@ export class HarvestMaze extends AdventureBase {
   }
 
   /* ──── Riddles ──── */
-  getCurrentRiddle() {
-    if (this.riddleAnswered >= 3) return null;
-    const riddles = [
-      { q: 'I have ears but cannot hear. What am I?', a: 'corn' },
-      { q: 'I am orange and round, with a glowing grin. What am I?', a: 'pumpkin' },
-      { q: 'The more you take, the more you leave behind. What am I?', a: 'footsteps' },
-      { q: 'I fall but never get hurt. What am I?', a: 'leaf' },
-      { q: 'I stand in fields all day, but never work. What am I?', a: 'scarecrow' },
-    ];
-    return riddles[Math.floor(this.time / 3) % riddles.length];
+  tryRiddleInteraction(playerPos) {
+    const wp = new THREE.Vector3(); this.scarecrow.getWorldPosition(wp);
+    if (playerPos.distanceToSquared(wp) >= 16) return null; // 4 units
+
+    if (this.riddleAnswered >= 3) {
+      return { allDone: true };
+    }
+
+    if (!this.riddleActive) {
+      // Start a new riddle
+      this._currentRiddleIndex = (this._currentRiddleIndex + 1) % this._riddles.length;
+      this.currentRiddle = this._riddles[this._currentRiddleIndex];
+      this.riddleActive = true;
+      this._riddleShowOptions = false;
+      this.riddleTimer = 15; // 15 seconds to answer
+      return { riddle: this.currentRiddle.q, showOptions: false };
+    } else if (!this._riddleShowOptions) {
+      // Show options on second interaction
+      this._riddleShowOptions = true;
+      return { riddle: this.currentRiddle.q, options: this.currentRiddle.options, showOptions: true };
+    }
+    return null;
   }
 
-  checkRiddleAnswer(answer) {
-    const riddle = this.getCurrentRiddle();
-    if (!riddle) return false;
-    if (answer.toLowerCase().includes(riddle.a)) {
+  answerRiddle(optionIndex) {
+    if (!this.riddleActive || !this.currentRiddle) return false;
+    const selected = this.currentRiddle.options[optionIndex];
+    if (selected === this.currentRiddle.a) {
       this.riddleAnswered++;
+      this.riddleActive = false;
+      this._riddleShowOptions = false;
       this.spawnBurst(new THREE.Vector3(0, 2, 8));
       // Reveal gem hint
       const gem = this.collectibles.find(g => !g.userData.collected);
       if (gem) {
-        // Make it pulse brighter
         const hint = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 6),
           new THREE.MeshBasicMaterial({ color: 0xffd700, transparent: true, opacity: 0.6 }));
         hint.position.copy(gem.position);
         this.group.add(hint);
         setTimeout(() => { hint.visible = false; hint.removeFromParent(); }, 4000);
       }
-      return true;
+      return { correct: true };
+    } else {
+      // Wrong answer - riddle stays active but timer continues
+      return { correct: false };
     }
-    return false;
+  }
+
+  updateRiddle(delta) {
+    if (!this.riddleActive) return;
+    this.riddleTimer -= delta;
+    if (this.riddleTimer <= 0) {
+      // Time's up - riddle expires
+      this.riddleActive = false;
+      this._riddleShowOptions = false;
+    }
+  }
+
+  /* ──── Fog of War ──── */
+  updateFog(playerPos) {
+    if (!this.fogActive) return;
+    // Track which maze cells the player has visited
+    const cellSize = this.navigationMesh.cellSize;
+    const offset = this.navigationMesh.offset;
+    const cellX = Math.floor((playerPos.x + offset) / cellSize);
+    const cellZ = Math.floor((playerPos.z + offset) / cellSize);
+
+    // Reveal cells within reveal radius
+    const revealCells = Math.ceil(this.revealRadius / cellSize);
+    for (let dz = -revealCells; dz <= revealCells; dz++) {
+      for (let dx = -revealCells; dx <= revealCells; dx++) {
+        const cx = cellX + dx;
+        const cz = cellZ + dz;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        if (dist <= revealCells) {
+          const key = `${cx},${cz}`;
+          this._fogRevealedCells.add(key);
+        }
+      }
+    }
   }
 
   update(delta) {
@@ -580,6 +741,22 @@ export class HarvestMaze extends AdventureBase {
       p.face.scale.set(0.55 * pulse, 0.35 * pulse, 0.55 * pulse);
     }
 
+    // Animate pumpkin gems
+    for (let gemIndex = 0; gemIndex < this.collectibles.length; gemIndex++) {
+      const gem = this.collectibles[gemIndex];
+      if (!gem.userData.isPumpkinGem || gem.userData.collected) continue;
+      gem.rotation.y += delta * 0.5;
+      gem.position.y = gem.userData.baseY + Math.sin(this.time * 1.5 + gem.userData.bobPhase) * 0.1;
+      // Pulse glow
+      if (gem.children[gem.children.length - 1]) {
+        const glow = gem.children[gem.children.length - 1];
+        if (glow.material && glow.material.opacity !== undefined) {
+          glow.material.opacity = 0.25 + Math.sin(this.time * 2 + gem.userData.bobPhase) * 0.15;
+        }
+      }
+    }
+
+    // Gem particles
     for (let gemIndex = 0; gemIndex < this.collectibles.length; gemIndex++) {
       const gem = this.collectibles[gemIndex];
       for (let particle = 0; particle < 10; particle++) {
@@ -611,17 +788,22 @@ export class HarvestMaze extends AdventureBase {
       leaf.rotation.z += delta * 0.5;
       if (leaf.position.y < leaf.userData.minY) {
         leaf.position.y = leaf.userData.maxY;
-        leaf.position.x = (Math.random() - 0.5) * 55;
-        leaf.position.z = (Math.random() - 0.5) * 55;
+        const a = Math.random() * Math.PI * 2;
+        const r = Math.random() * (this.mapRadius - 2);
+        leaf.position.x = Math.sin(a) * r;
+        leaf.position.z = Math.cos(a) * r;
       }
     }
 
-    // Apple tree bob timers
+    // Apple tree bob cooldowns
     for (const tree of this.appleTrees) {
-      if (tree.userData.bobTimer > 0) {
-        tree.userData.bobTimer -= delta;
-        if (tree.userData.bobTimer <= 0) tree.userData.appleReady = true;
+      if (tree.userData.bobCooldown > 0) {
+        tree.userData.bobCooldown -= delta;
+        if (tree.userData.bobCooldown <= 0) tree.userData.appleReady = true;
       }
     }
+
+    // Riddle timer
+    this.updateRiddle(delta);
   }
 }

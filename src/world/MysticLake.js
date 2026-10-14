@@ -11,7 +11,8 @@ const MAT = {
   lily: new THREE.MeshStandardMaterial({ color: 0x3d8a4a, roughness: 0.7, side: THREE.DoubleSide }),
   lilyFlower: (h) => new THREE.MeshBasicMaterial({ color: new THREE.Color().setHSL(h, 0.7, 0.6) }),
   willow: new THREE.MeshStandardMaterial({ color: 0x5c8a3f, roughness: 0.8, side: THREE.DoubleSide }),
-  pearl: new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 }),
+  pearl: new THREE.MeshStandardMaterial({ color: 0xfff8f0, roughness: 0.1, metalness: 0.3 }),
+  pearlGlow: new THREE.MeshBasicMaterial({ color: 0xfff0dd, transparent: true, opacity: 0.5 }),
   frog: new THREE.MeshStandardMaterial({ color: 0x33cc55, roughness: 0.4 }),
   vortex: new THREE.MeshBasicMaterial({ color: 0x3388cc, transparent: true, opacity: 0.55, side: THREE.DoubleSide }),
   heron: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 }),
@@ -28,10 +29,19 @@ export class MysticLake extends AdventureBase {
     this.vortices = [];
     this.boatActive = false;
     this.boatPosition = new THREE.Vector3(0, 0.25, 9);
+    this.boatAngle = 0;
+    this.boatSpeed = 0;
+    this._boatSailedDistance = 0;
+    this._boatSailed = false;
     this.fishCaught = 0;
     this.isFishing = false;
     this.fishTimer = 0;
+    this.fishBiting = false;
+    this.fishBiteWindow = 0;
+    this.fishBiteTaps = 0;
     this.underwaterActive = false;
+    this._underwaterDone = false;
+    this._vorticesEntered = 0;
 
     this.build();
     this._setupMissions();
@@ -49,10 +59,10 @@ export class MysticLake extends AdventureBase {
   getMissions() { return this._missions; }
   getHints() {
     return [
-      '🏃 走過湖中珍珠即可自動收集',
-      '🐸 在蓮葉間跳躍，靠近發光青蛙互動',
-      '🚣 走到碼頭旁的小船自動上船，WASD 航行',
-      '🌊 踩入漩渦會被傳送到水下洞穴',
+      '🏃 走近珍珠即可自動收集',
+      '🐸 在蓮葉間跳躍，靠近發光青蛙按 [E] 互動',
+      '🚶 走到碼頭旁的小船按 [E] 上船，WASD 航行',
+      '🌊 找到 3 個漩渦並踩入，解鎖水下洞穴',
       '🎣 在碼頭按 [E] 拋竿，魚上鉤時快速連按 [E] 拉起',
       '🔮 找到傳送門按 [E] 即可返回農場',
     ];
@@ -60,7 +70,7 @@ export class MysticLake extends AdventureBase {
   checkMissionStatus() {
     return {
       gems: this.collected >= 14,
-      lilies: this.frogs.filter(f => f.activated).length >= 5,
+      lilies: this.frogs.filter(f => f.userData.activated).length >= 5,
       sail: this._boatSailed,
       underwater: this._underwaterDone,
       fishing: this.fishCaught >= 3,
@@ -101,8 +111,9 @@ export class MysticLake extends AdventureBase {
     }
 
     // ── Glowing frogs on lily pads ──
+    const frogPadIndices = [2, 5, 8, 11, 14, 16, 17];
     for (let i = 0; i < 7; i++) {
-      const pad = this.lilyPads[Math.floor(Math.random() * this.lilyPads.length)];
+      const pad = this.lilyPads[frogPadIndices[i] % this.lilyPads.length];
       const frog = new THREE.Group();
       const body = new THREE.Mesh(GEO.sphere12, MAT.frog);
       body.scale.set(0.2, 0.15, 0.2); frog.add(body);
@@ -131,7 +142,7 @@ export class MysticLake extends AdventureBase {
     // ── Willow trees (12) ──
     for (let i = 0; i < 12; i++) {
       const a = (i / 12) * Math.PI * 2;
-      const r = 26;
+      const r = 28;
       const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.4, 4, 12), MAT.wood);
       trunk.position.set(Math.sin(a) * r, 2, Math.cos(a) * r); trunk.castShadow = true;
       this.group.add(trunk);
@@ -162,19 +173,30 @@ export class MysticLake extends AdventureBase {
       }
     }
 
-    // ── Vortices (underwater cave entrances) ──
-    for (let v = 0; v < 3; v++) {
-      const va = (v / 3) * Math.PI * 2;
-      const vr = 8;
-      const vortex = new THREE.Mesh(new THREE.RingGeometry(0.5, 1.2, 16), MAT.vortex);
-      vortex.rotation.x = -Math.PI / 2;
-      vortex.position.set(Math.sin(va) * vr, 0.16, Math.cos(va) * vr);
-      vortex.userData = { entered: false, pos: new THREE.Vector3(Math.sin(va) * vr, 0, Math.cos(va) * vr) };
+    // ── Vortices (underwater cave entrances) - 3 total, need all 3 to unlock underwater ──
+    const vortexPositions = [
+      { x: 8, z: 2 },
+      { x: -5, z: 7 },
+      { x: 2, z: -9 },
+    ];
+    vortexPositions.forEach((vp, v) => {
+      const vortex = new THREE.Group();
+      const ring = new THREE.Mesh(new THREE.RingGeometry(0.5, 1.2, 16), MAT.vortex);
+      ring.rotation.x = -Math.PI / 2;
+      vortex.add(ring);
+      // Glow center
+      const center = new THREE.Mesh(GEO.sphere12,
+        new THREE.MeshBasicMaterial({ color: 0x44aaff, transparent: true, opacity: 0.4 }));
+      center.scale.setScalar(0.3);
+      center.position.y = 0.1;
+      vortex.add(center);
+      vortex.position.set(vp.x, 0.16, vp.z);
+      vortex.userData = { entered: false, pos: new THREE.Vector3(vp.x, 0, vp.z), index: v };
       this.group.add(vortex);
       this.vortices.push(vortex);
-    }
+    });
 
-    // ── Dock + Boat ──
+    // ── Dock + Boat (boat properly placed in water) ──
     const dock = new THREE.Group();
     for (let i = 0; i < 8; i++) {
       const plank = new THREE.Mesh(new THREE.BoxGeometry(2, 0.12, 0.5), MAT.wood);
@@ -182,14 +204,22 @@ export class MysticLake extends AdventureBase {
     }
     dock.position.set(0, 0, 15.5); this.group.add(dock);
 
-    // Boat
+    // Boat - placed in water (z=13, inside lake radius 16)
     this.boatGroup = new THREE.Group();
     const hull = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.3, 2.2), MAT.wood);
     hull.position.y = 0.12; this.boatGroup.add(hull);
     const bow = new THREE.Mesh(GEO.cone12, MAT.wood);
     bow.scale.set(0.6, 0.5, 0.8); bow.rotation.x = Math.PI / 2; bow.position.z = 1.3; bow.position.y = 0.1;
     this.boatGroup.add(bow);
-    this.boatGroup.position.set(0, 0.2, 15);
+    // Sail
+    const sail = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 1.2),
+      new THREE.MeshBasicMaterial({ color: 0xf0e6d2, side: THREE.DoubleSide, transparent: true, opacity: 0.9 }));
+    sail.position.set(0, 0.9, 0);
+    this.boatGroup.add(sail);
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.5, 6), MAT.wood);
+    mast.position.set(0, 0.85, 0);
+    this.boatGroup.add(mast);
+    this.boatGroup.position.set(0, 0.2, 13); // properly in the water
     this.boatGroup.visible = true;
     this.group.add(this.boatGroup);
 
@@ -206,12 +236,14 @@ export class MysticLake extends AdventureBase {
       this.group.add(heron);
     }
 
-    // ── Fireflies ──
+    // ── Fireflies (clamped to map edge) ──
     const ffGeo = new THREE.SphereGeometry(0.07, 4, 3);
     const ffMat = new THREE.MeshBasicMaterial({ color: 0xffee88, transparent: true, opacity: 0.7 });
     for (let i = 0; i < 25; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = 18 + Math.random() * 10;
       const ff = new THREE.Mesh(ffGeo, ffMat.clone());
-      ff.position.set((Math.random() - 0.5) * 50, 0.3 + Math.random() * 3, (Math.random() - 0.5) * 50);
+      ff.position.set(Math.sin(a) * r, 0.3 + Math.random() * 3, Math.cos(a) * r);
       this.group.add(ff);
       this.fireflies.push({ mesh: ff, baseX: ff.position.x, baseZ: ff.position.z, baseY: ff.position.y, phase: Math.random() * Math.PI * 2, speed: 0.3 + Math.random() * 0.5 });
     }
@@ -220,24 +252,55 @@ export class MysticLake extends AdventureBase {
     const amb = new THREE.PointLight(0x88ccdd, 2, 22, 2);
     amb.position.y = 5; this.group.add(amb);
 
-    // ── Gems (pearls) ──
-    const pearls = [];
+    // ── Pearl collectibles (replace default gems) ──
+    const pearlPositions = [];
     for (let i = 0; i < 14; i++) {
       const a = (i / 14) * Math.PI * 2;
       const r = 2 + Math.random() * 26;
-      pearls.push(new THREE.Vector3(Math.sin(a) * r, 0.35, Math.cos(a) * r));
+      pearlPositions.push(new THREE.Vector3(Math.sin(a) * r, 0.35, Math.cos(a) * r));
     }
-    this.spawnGems(pearls, 0.18);
+    this._spawnPearls(pearlPositions);
 
     this.addReturnPortal(this.cfg, new THREE.Vector3(8, 0, -8));
 
     // ── Colliders ──
     for (let i = 0; i < 12; i++) {
       const a = (i / 12) * Math.PI * 2;
-      this.addObstacleCollider(new THREE.Vector3(Math.sin(a) * 26, 0, Math.cos(a) * 26), 0.9);
+      this.addObstacleCollider(new THREE.Vector3(Math.sin(a) * 28, 0, Math.cos(a) * 28), 0.9);
     }
     this.addObstacleCollider(new THREE.Vector3(0, 0, 14.5), 1.0);
     this.addObstacleCollider(new THREE.Vector3(0, 0, 16.5), 1.0);
+  }
+
+  _spawnPearls(positions) {
+    this.total += positions.length;
+    positions.forEach((pos, i) => {
+      const pearl = new THREE.Group();
+      // Main pearl sphere
+      const body = new THREE.Mesh(GEO.sphere12, MAT.pearl.clone());
+      body.scale.setScalar(0.2);
+      pearl.add(body);
+      // Outer glow halo
+      const glow = new THREE.Mesh(GEO.sphere12, MAT.pearlGlow.clone());
+      glow.scale.setScalar(0.35);
+      pearl.add(glow);
+      // Iridescent sheen (smaller bright spot)
+      const sheen = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 4),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 }));
+      sheen.position.set(0.06, 0.06, 0.12);
+      pearl.add(sheen);
+
+      pearl.position.copy(pos);
+      pearl.userData = {
+        collected: false,
+        index: this.collectibles.length + i,
+        baseY: pos.y,
+        isPearl: true,
+        floatPhase: Math.random() * Math.PI * 2,
+      };
+      this.group.add(pearl);
+      this.collectibles.push(pearl);
+    });
   }
 
   checkFrogInteraction(playerPos) {
@@ -260,14 +323,24 @@ export class MysticLake extends AdventureBase {
       const wp = v.userData.pos.clone();
       if (new THREE.Vector2(playerPos.x, playerPos.z).distanceTo(new THREE.Vector2(wp.x, wp.z)) < 2) {
         v.userData.entered = true;
-        this._underwaterDone = true;
-        // Spawn night pearls
-        const gems = [];
-        for (let i = 0; i < 6; i++) {
-          const a = (i / 6) * Math.PI * 2;
-          gems.push(new THREE.Vector3(wp.x + Math.sin(a) * 3, 0.4, wp.z + Math.cos(a) * 3));
+        this._vorticesEntered++;
+        // Visual feedback: vortex stops spinning and brightens
+        v.children[0].material.opacity = 0.8;
+        v.children[1].material.opacity = 0.7;
+        this.spawnBurst(wp.clone().add(new THREE.Vector3(0, 0.5, 0)));
+
+        // Only complete underwater mission when ALL 3 vortices are found
+        if (this._vorticesEntered >= 3) {
+          this._underwaterDone = true;
+          // Spawn night pearl reward at center of lake
+          const gems = [];
+          for (let i = 0; i < 6; i++) {
+            const a = (i / 6) * Math.PI * 2;
+            gems.push(new THREE.Vector3(Math.sin(a) * 2, 0.5, Math.cos(a) * 2));
+          }
+          this._spawnPearls(gems);
+          this.spawnBurst(new THREE.Vector3(0, 1.5, 0));
         }
-        this.spawnGems(gems, 0.24);
         return true;
       }
     }
@@ -277,25 +350,60 @@ export class MysticLake extends AdventureBase {
   startFishing() {
     if (this.isFishing) return null;
     this.isFishing = true;
-    this.fishTimer = 3 + Math.random() * 5;
+    this.fishTimer = 3 + Math.random() * 5; // wait time before bite
+    this.fishBiting = false;
+    this.fishBiteWindow = 0;
+    this.fishBiteTaps = 0;
     return { started: true };
   }
 
-  checkFishCatch() {
+  // Called when player presses E during fishing
+  tryReelIn() {
     if (!this.isFishing) return false;
-    this.fishTimer -= 0.016;
-    if (this.fishTimer <= 0) {
-      this.isFishing = false;
-      this.fishCaught++;
-      return true;
+    if (this.fishBiting && this.fishBiteWindow > 0) {
+      // Good - player is reeling in during bite window
+      this.fishBiteTaps++;
+      if (this.fishBiteTaps >= 5) {
+        // Caught the fish!
+        this.isFishing = false;
+        this.fishCaught++;
+        this.fishBiting = false;
+        return { caught: true };
+      }
+      return { tapping: true, taps: this.fishBiteTaps };
     }
     return false;
   }
 
+  updateFishing(delta) {
+    if (!this.isFishing) return null;
+    if (!this.fishBiting) {
+      // Waiting for bite
+      this.fishTimer -= delta;
+      if (this.fishTimer <= 0) {
+        // Fish is biting! Player has a window to reel in
+        this.fishBiting = true;
+        this.fishBiteWindow = 2.5; // 2.5 second window to tap E
+        return { bite: true };
+      }
+    } else {
+      // Bite window active
+      this.fishBiteWindow -= delta;
+      if (this.fishBiteWindow <= 0) {
+        // Fish got away - player didn't tap enough
+        this.isFishing = false;
+        this.fishBiting = false;
+        return { gotAway: true };
+      }
+    }
+    return null;
+  }
+
   boardBoat(playerPos) {
     const wp = new THREE.Vector3(); this.boatGroup.getWorldPosition(wp);
-    if (playerPos.distanceToSquared(wp) < 6.25 && !this.boatActive) {
+    if (playerPos.distanceToSquared(wp) < 9 && !this.boatActive) {
       this.boatActive = true;
+      this._boatSailedDistance = 0;
       return true;
     }
     return false;
@@ -303,7 +411,42 @@ export class MysticLake extends AdventureBase {
 
   exitBoat() {
     this.boatActive = false;
-    this._boatSailed = true;
+    // Only count as "sailed around lake" if player sailed enough distance
+    if (this._boatSailedDistance > 60) {
+      this._boatSailed = true;
+    }
+  }
+
+  updateBoat(delta, input) {
+    if (!this.boatActive) return;
+    // Simple boat movement
+    const speed = 5;
+    const turnSpeed = 1.5;
+    if (input.forward) this.boatSpeed = Math.min(this.boatSpeed + delta * 3, speed);
+    else if (input.backward) this.boatSpeed = Math.max(this.boatSpeed - delta * 3, -speed * 0.5);
+    else this.boatSpeed *= 0.95; // friction
+
+    if (input.left) this.boatAngle += turnSpeed * delta * (this.boatSpeed >= 0 ? 1 : -1);
+    if (input.right) this.boatAngle -= turnSpeed * delta * (this.boatSpeed >= 0 ? 1 : -1);
+
+    const moveX = Math.sin(this.boatAngle) * this.boatSpeed * delta;
+    const moveZ = Math.cos(this.boatAngle) * this.boatSpeed * delta;
+
+    // Keep boat within lake bounds (radius 15)
+    const newX = this.boatPosition.x + moveX;
+    const newZ = this.boatPosition.z + moveZ;
+    const dist = Math.sqrt(newX * newX + newZ * newZ);
+    if (dist < 15) {
+      const moved = Math.sqrt(moveX * moveX + moveZ * moveZ);
+      this._boatSailedDistance += moved;
+      this.boatPosition.x = newX;
+      this.boatPosition.z = newZ;
+    } else {
+      this.boatSpeed *= 0.5;
+    }
+
+    this.boatGroup.position.copy(this.boatPosition);
+    this.boatGroup.rotation.y = this.boatAngle;
   }
 
   update(delta) {
@@ -322,7 +465,23 @@ export class MysticLake extends AdventureBase {
     }
     // Vortex rotation
     for (const v of this.vortices) {
-      if (!v.userData.entered) v.rotation.z += delta * 1.2;
+      if (!v.userData.entered) {
+        v.rotation.z += delta * 1.2;
+        // Pulse glow
+        const pulse = 0.5 + Math.sin(this.time * 2 + v.userData.index) * 0.2;
+        v.children[1].scale.setScalar(0.3 + pulse * 0.15);
+      }
+    }
+
+    // Animate pearls (gentle float and rotation)
+    for (const gem of this.collectibles) {
+      if (!gem.userData.isPearl || gem.userData.collected) continue;
+      gem.position.y = gem.userData.baseY + Math.sin(this.time * 1.0 + gem.userData.floatPhase) * 0.1;
+      gem.rotation.y += delta * 0.3;
+      // Pulse glow
+      if (gem.children[1]) {
+        gem.children[1].material.opacity = 0.35 + Math.sin(this.time * 2 + gem.userData.floatPhase) * 0.15;
+      }
     }
   }
 }

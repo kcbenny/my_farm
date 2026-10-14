@@ -15,6 +15,8 @@ const MAT = {
   path: new THREE.MeshStandardMaterial({ color: 0x5a4a3a, roughness: 0.9 }),
   stream: new THREE.MeshBasicMaterial({ color: 0x4488bb, transparent: true, opacity: 0.5, side: THREE.DoubleSide }),
   bounceMush: new THREE.MeshStandardMaterial({ color: 0xff6644, roughness: 0.5 }),
+  fairyDust: new THREE.MeshBasicMaterial({ color: 0xffee88, transparent: true, opacity: 0.9 }),
+  fairyDustCore: new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1 }),
 };
 
 export class EnchantedForest extends AdventureBase {
@@ -29,6 +31,7 @@ export class EnchantedForest extends AdventureBase {
     this.firefliesCaptured = 0;
     this.canopyReached = false;
     this.fairyCirclesFound = 0;
+    this._fairyFollowTimers = [0, 0, 0]; // track how long player follows each fairy
 
     this.build();
     this._setupMissions();
@@ -46,8 +49,8 @@ export class EnchantedForest extends AdventureBase {
   getMissions() { return this._missions; }
   getHints() {
     return [
-      '🏃 走過仙子粉塵即可自動收集',
-      '🧚 跟隨閃爍的仙子飛行找到蘑菇圈',
+      '🏃 走近閃亮的仙子粉塵簇即可自動收集',
+      '🧚 跟隨金色仙子飛行，持續靠近一段時間會引你到蘑菇圈',
       '🍄 踩上紅色大蘑菇可彈跳到樹冠平台',
       '🕳️ 走近發光的樹洞會被傳送到秘密區域',
       '✨ 追逐金色螢火蟲碰觸即可捕捉',
@@ -60,12 +63,13 @@ export class EnchantedForest extends AdventureBase {
       fairies: this.fairyCirclesFound >= 3,
       canopy: this.canopyReached,
       fireflies: this.firefliesCaptured >= 10,
-      treeholes: this.treeholes.filter(t => t.found).length >= 4,
+      treeholes: this.treeholes.filter(t => t.userData.found).length >= 4,
     };
   }
 
   build() {
     const R = this.mapRadius;
+    const safeR = R - 3; // keep things inside the map
 
     // Ground
     const ground = new THREE.Mesh(new THREE.CylinderGeometry(R, R + 0.5, 0.5, 48), MAT.moss);
@@ -114,7 +118,7 @@ export class EnchantedForest extends AdventureBase {
       const cap = new THREE.Mesh(new THREE.SphereGeometry(1.2, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), MAT.bounceMush);
       cap.position.y = 0.9; bm.add(cap);
       bm.position.set(Math.sin(a) * r, 0, Math.cos(a) * r);
-      bm.userData = { bouncePower: 6, index: i };
+      bm.userData = { bouncePower: 12, index: i };
       this.group.add(bm);
       this.bounceMushrooms.push(bm);
     }
@@ -150,9 +154,9 @@ export class EnchantedForest extends AdventureBase {
     // ── Fairy guides (gold wisps) ──
     for (let f = 0; f < 3; f++) {
       const fairy = new THREE.Mesh(GEO.sphere12, MAT.goldWisp.clone());
-      fairy.scale.setScalar(0.18);
+      fairy.scale.setScalar(0.25);
       const ba = (f / 3) * Math.PI * 2;
-      fairy.position.set(Math.sin(ba) * 18, 1.5, Math.cos(ba) * 18);
+      fairy.position.set(Math.sin(ba) * 16, 1.5, Math.cos(ba) * 16);
       this.group.add(fairy);
       this.goldWisps.push({
         mesh: fairy,
@@ -160,9 +164,10 @@ export class EnchantedForest extends AdventureBase {
         baseY: fairy.position.y, phase: f * 2.1,
         revealedCircle: false,
         circlePos: new THREE.Vector3(Math.sin(ba + 0.5) * 10, 0, Math.cos(ba + 0.5) * 10),
+        followTimer: 0,
       });
     }
-    // Mushroom circles (hidden, revealed by fairies)
+    // Mushroom circles (hidden, revealed by fairies) - positions clamped inside map
     for (let c = 0; c < 3; c++) {
       const circle = new THREE.Group();
       for (let m = 0; m < 6; m++) {
@@ -172,23 +177,28 @@ export class EnchantedForest extends AdventureBase {
         miniMush.position.set(Math.sin(ma) * 1.2, 0.2, Math.cos(ma) * 1.2);
         circle.add(miniMush);
       }
-      circle.position.set((Math.random() - 0.5) * 22, 0, (Math.random() - 0.5) * 22);
+      // Place circles at known positions inside the map (not random)
+      const ca = (c / 3) * Math.PI * 2 + 0.6;
+      circle.position.set(Math.sin(ca) * 10, 0, Math.cos(ca) * 10);
       circle.visible = false;
-      circle.userData = { revealed: false, gemsSpawned: false };
+      circle.userData = { revealed: false, gemsSpawned: false, index: c };
       this.group.add(circle);
       this.mushroomCircles.push(circle);
     }
 
-    // ── Gold fireflies ──
+    // ── Gold fireflies (clamped inside map radius) ──
     for (let i = 0; i < 10; i++) {
-      const ff = new THREE.Mesh(new THREE.SphereGeometry(0.1, 5, 4),
-        new THREE.MeshBasicMaterial({ color: 0xffdd44, transparent: true, opacity: 0.85 }));
-      ff.position.set((Math.random() - 0.5) * 50, 0.5 + Math.random() * 3, (Math.random() - 0.5) * 50);
+      const ff = new THREE.Mesh(new THREE.SphereGeometry(0.12, 5, 4),
+        new THREE.MeshBasicMaterial({ color: 0xffdd44, transparent: true, opacity: 0.9 }));
+      const a = Math.random() * Math.PI * 2;
+      const r = 3 + Math.random() * (safeR - 3);
+      ff.position.set(Math.sin(a) * r, 0.5 + Math.random() * 3, Math.cos(a) * r);
       this.group.add(ff);
       this.goldFireflies.push({
         mesh: ff, captured: false,
         baseX: ff.position.x, baseZ: ff.position.z, baseY: ff.position.y,
         phase: Math.random() * Math.PI * 2, speed: 0.5 + Math.random() * 0.8,
+        wanderR: r * 0.3,
       });
     }
 
@@ -199,16 +209,19 @@ export class EnchantedForest extends AdventureBase {
     streamPlane.rotation.z = 0.1;
     this.group.add(streamPlane);
 
-    // ── Wisps ──
+    // ── Wisps (clamped inside map) ──
     for (let i = 0; i < 20; i++) {
       const wisp = new THREE.Mesh(GEO.sphere12, MAT.wisp.clone());
       wisp.scale.setScalar(0.12);
-      wisp.position.set((Math.random() - 0.5) * 50, 0.6 + Math.random() * 3, (Math.random() - 0.5) * 50);
+      const a = Math.random() * Math.PI * 2;
+      const r = 2 + Math.random() * (safeR - 2);
+      wisp.position.set(Math.sin(a) * r, 0.6 + Math.random() * 3, Math.cos(a) * r);
       this.group.add(wisp);
       this.wisps.push({
         mesh: wisp,
         baseX: wisp.position.x, baseZ: wisp.position.z, baseY: wisp.position.y,
         phase: Math.random() * Math.PI * 2, speed: 0.3 + Math.random() * 0.5,
+        wanderR: 2 + Math.random() * 2,
       });
     }
 
@@ -223,14 +236,14 @@ export class EnchantedForest extends AdventureBase {
     const amb = new THREE.PointLight(0x6699cc, 1.5, 20, 2);
     amb.position.y = 4; this.group.add(amb);
 
-    // ── Gems ──
-    const gems = [];
+    // ── Fairy Dust collectibles (replace default gems) ──
+    const dustPositions = [];
     for (let i = 0; i < 16; i++) {
       const a = i * 0.8 + Math.random() * 0.5;
-      const r = 4 + Math.random() * 26;
-      gems.push(new THREE.Vector3(Math.sin(a) * r, 0.5 + Math.random() * 0.6, Math.cos(a) * r));
+      const r = 4 + Math.random() * 22;
+      dustPositions.push(new THREE.Vector3(Math.sin(a) * r, 0.5 + Math.random() * 0.6, Math.cos(a) * r));
     }
-    this.spawnGems(gems, 0.2);
+    this._spawnFairyDust(dustPositions);
 
     this.addReturnPortal(this.cfg, new THREE.Vector3(0, 0, -10));
 
@@ -245,6 +258,37 @@ export class EnchantedForest extends AdventureBase {
       const a = (i / 14) * Math.PI * 2; const r = 8 + (i % 4) * 3;
       this.addObstacleCollider(new THREE.Vector3(Math.sin(a) * r, 0, Math.cos(a) * r), 0.7);
     }
+  }
+
+  _spawnFairyDust(positions) {
+    this.total += positions.length;
+    positions.forEach((pos, i) => {
+      const dust = new THREE.Group();
+      // Core bright center
+      const core = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), MAT.fairyDustCore.clone());
+      dust.add(core);
+      // Outer glow
+      const glow = new THREE.Mesh(new THREE.SphereGeometry(0.25, 8, 6), MAT.fairyDust.clone());
+      dust.add(glow);
+      // 4 sparkles around
+      for (let s = 0; s < 4; s++) {
+        const spark = new THREE.Mesh(new THREE.SphereGeometry(0.05, 4, 3),
+          new THREE.MeshBasicMaterial({ color: 0xffffaa, transparent: true, opacity: 0.8 }));
+        const sa = (s / 4) * Math.PI * 2;
+        spark.position.set(Math.cos(sa) * 0.2, Math.sin(s * 1.5) * 0.1, Math.sin(sa) * 0.2);
+        spark.userData = { baseAngle: sa, orbitSpeed: 0.8 + s * 0.3, bobPhase: s * 0.7 };
+        dust.add(spark);
+      }
+      dust.position.copy(pos);
+      dust.userData = {
+        collected: false,
+        index: this.collectibles.length + i,
+        baseY: pos.y,
+        isFairyDust: true,
+      };
+      this.group.add(dust);
+      this.collectibles.push(dust);
+    });
   }
 
   makeTree(scale) {
@@ -273,15 +317,17 @@ export class EnchantedForest extends AdventureBase {
   checkCanopyPlatform(playerPos) {
     const wp = new THREE.Vector3(); this.canopyPlatform.getWorldPosition(wp);
     if (playerPos.distanceToSquared(wp) < 9 && playerPos.y > 6.5) {
-      this.canopyReached = true;
-      // Spawn bonus gems on canopy
-      if (!this._canopyGemsSpawned) {
-        this._canopyGemsSpawned = true;
-        const gems = [];
-        for (let i = 0; i < 5; i++) {
-          gems.push(new THREE.Vector3(wp.x + (Math.random() - 0.5) * 4, wp.y + 0.5, wp.z + (Math.random() - 0.5) * 4));
+      if (!this.canopyReached) {
+        this.canopyReached = true;
+        // Spawn bonus gems on canopy
+        if (!this._canopyGemsSpawned) {
+          this._canopyGemsSpawned = true;
+          const gems = [];
+          for (let i = 0; i < 5; i++) {
+            gems.push(new THREE.Vector3(wp.x + (Math.random() - 0.5) * 4, wp.y + 0.5, wp.z + (Math.random() - 0.5) * 4));
+          }
+          this._spawnFairyDust(gems);
         }
-        this.spawnGems(gems, 0.24);
       }
     }
   }
@@ -314,7 +360,7 @@ export class EnchantedForest extends AdventureBase {
         for (let i = 0; i < 3; i++) {
           gems.push(new THREE.Vector3(Math.sin(destA) * (20 + i), 0.5, Math.cos(destA) * (20 + i)));
         }
-        this.spawnGems(gems, 0.22);
+        this._spawnFairyDust(gems);
         return { teleportTo: new THREE.Vector3(Math.sin(destA) * 22, 0, Math.cos(destA) * 22) };
       }
     }
@@ -329,54 +375,99 @@ export class EnchantedForest extends AdventureBase {
     }
     // Wisps
     for (const w of this.wisps) {
-      w.mesh.position.x = w.baseX + Math.sin(this.time * w.speed + w.phase) * 3;
-      w.mesh.position.z = w.baseZ + Math.cos(this.time * w.speed * 0.7 + w.phase) * 2;
+      w.mesh.position.x = w.baseX + Math.sin(this.time * w.speed + w.phase) * w.wanderR;
+      w.mesh.position.z = w.baseZ + Math.cos(this.time * w.speed * 0.7 + w.phase) * w.wanderR * 0.7;
       w.mesh.position.y = w.baseY + Math.sin(this.time * 1.3 + w.phase) * 0.5;
       w.mesh.material.opacity = 0.4 + Math.sin(this.time * 3 + w.phase) * 0.3;
     }
-    // Gold fairies
-    for (const fw of this.goldWisps) {
-      fw.mesh.position.x = fw.baseX + Math.sin(this.time * 0.6 + fw.phase) * 12;
-      fw.mesh.position.z = fw.baseZ + Math.cos(this.time * 0.6 + fw.phase) * 10;
+    // Gold fairies - player must follow near them to reveal mushroom circles
+    for (let fi = 0; fi < this.goldWisps.length; fi++) {
+      const fw = this.goldWisps[fi];
+      fw.mesh.position.x = fw.baseX + Math.sin(this.time * 0.6 + fw.phase) * 10;
+      fw.mesh.position.z = fw.baseZ + Math.cos(this.time * 0.6 + fw.phase) * 8;
       fw.mesh.position.y = fw.baseY + Math.sin(this.time * 1.5 + fw.phase) * 1.0;
       fw.mesh.material.opacity = 0.6 + Math.sin(this.time * 2.5 + fw.phase) * 0.35;
-      // Reveal mushroom circle when player is near
-      if (!fw.revealedCircle) {
-        const idx = this.goldWisps.indexOf(fw);
-        if (idx < this.mushroomCircles.length) {
-          const mc = this.mushroomCircles[idx];
-          if (!mc.userData.revealed) {
-            const distToFairy = this.goldWisps.filter(g => !g.revealedCircle).length;
-            // Auto-reveal based on following time
-            if (this.time % 60 < delta * 3) { // roughly every minute, more frequent when near
-              mc.visible = true; mc.userData.revealed = true; fw.revealedCircle = true;
-              this.fairyCirclesFound++;
-              // Spawn gems in circle
-              if (!mc.userData.gemsSpawned) {
-                mc.userData.gemsSpawned = true;
-                const gps = [];
-                for (let j = 0; j < 5; j++) {
-                  const ja = (j / 5) * Math.PI * 2;
-                  gps.push(new THREE.Vector3(mc.position.x + Math.sin(ja) * 1.2, 0.5, mc.position.z + Math.cos(ja) * 1.2));
-                }
-                this.spawnGems(gps, 0.2);
-              }
-            }
-          }
+
+      // Check if player is following this fairy
+      if (!fw.revealedCircle && fi < this.mushroomCircles.length) {
+        const mc = this.mushroomCircles[fi];
+        if (!mc.userData.revealed) {
+          const wp = new THREE.Vector3();
+          fw.mesh.getWorldPosition(wp);
+          // Use playerPos from the update context - we'll track via a stored position
+          // Actually, we check in the game loop via checkFairyProximity
         }
       }
     }
     // Gold fireflies (run away from player)
     for (const ff of this.goldFireflies) {
       if (ff.captured) continue;
-      ff.mesh.position.x = ff.baseX + Math.sin(this.time * ff.speed + ff.phase) * 4;
-      ff.mesh.position.z = ff.baseZ + Math.cos(this.time * ff.speed * 0.8 + ff.phase) * 3;
+      ff.mesh.position.x = ff.baseX + Math.sin(this.time * ff.speed + ff.phase) * ff.wanderR;
+      ff.mesh.position.z = ff.baseZ + Math.cos(this.time * ff.speed * 0.8 + ff.phase) * ff.wanderR * 0.75;
       ff.mesh.position.y = ff.baseY + Math.sin(this.time * 2 + ff.phase) * 0.8;
     }
     // Bounce mushrooms pulse
     for (const bm of this.bounceMushrooms) {
       const s = 1 + Math.sin(this.time * 2.5 + bm.userData.index) * 0.08;
       bm.children[1]?.scale?.setScalar?.(s); // cap pulse
+    }
+
+    // Animate fairy dust collectibles (sparkles orbiting)
+    for (const gem of this.collectibles) {
+      if (!gem.userData.isFairyDust || gem.userData.collected) continue;
+      gem.children.forEach((child, idx) => {
+        if (idx < 2) return; // skip core and glow
+        const spark = child;
+        const angle = this.time * spark.userData.orbitSpeed + spark.userData.baseAngle;
+        spark.position.x = Math.cos(angle) * 0.2;
+        spark.position.z = Math.sin(angle) * 0.2;
+        spark.position.y = Math.sin(this.time * 2 + spark.userData.bobPhase) * 0.1;
+      });
+      // Gentle bobbing
+      gem.position.y = gem.userData.baseY + Math.sin(this.time * 1.5 + gem.userData.index * 0.5) * 0.15;
+    }
+  }
+
+  // Called by MapManager each frame with player position
+  checkFairyProximity(playerPos, delta) {
+    for (let fi = 0; fi < this.goldWisps.length; fi++) {
+      const fw = this.goldWisps[fi];
+      if (fw.revealedCircle) continue;
+      if (fi >= this.mushroomCircles.length) continue;
+      const mc = this.mushroomCircles[fi];
+      if (mc.userData.revealed) continue;
+
+      const wp = new THREE.Vector3();
+      fw.mesh.getWorldPosition(wp);
+      const dist = playerPos.distanceTo(wp);
+
+      if (dist < 4) {
+        // Player is near the fairy - accumulate follow time
+        fw.followTimer = (fw.followTimer || 0) + delta;
+        // Visual feedback: fairy gets brighter when followed
+        fw.mesh.material.opacity = Math.min(1, 0.7 + fw.followTimer * 0.1);
+        // After 8 seconds of following, reveal the mushroom circle
+        if (fw.followTimer >= 8) {
+          mc.visible = true;
+          mc.userData.revealed = true;
+          fw.revealedCircle = true;
+          this.fairyCirclesFound++;
+          // Spawn gems in circle
+          if (!mc.userData.gemsSpawned) {
+            mc.userData.gemsSpawned = true;
+            const gps = [];
+            for (let j = 0; j < 5; j++) {
+              const ja = (j / 5) * Math.PI * 2;
+              gps.push(new THREE.Vector3(mc.position.x + Math.sin(ja) * 1.2, 0.5, mc.position.z + Math.cos(ja) * 1.2));
+            }
+            this._spawnFairyDust(gps);
+          }
+          this.spawnBurst(mc.position.clone().add(new THREE.Vector3(0, 1, 0)));
+        }
+      } else {
+        // Player wandered away - slowly decay timer
+        fw.followTimer = Math.max(0, (fw.followTimer || 0) - delta * 0.5);
+      }
     }
   }
 }
